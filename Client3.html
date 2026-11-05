@@ -1,0 +1,132 @@
+<script>
+/* ══════════════════════════════════════════════════════════════════
+   КАНАЛ TELEGRAM — клиентская часть (новый файл Client3.html)
+   Добавляет в Пульт раздел «Канал»: подписчики, посты, просмотры, реакции.
+   Данные приносит функция pultChannelStats (файл Channel.gs) из Supabase.
+   Подключается в Index.html одной строкой после Client2:  include("Client3")
+   Содержание: 1. Раздел в меню  2. Загрузка данных  3. Отрисовка
+══════════════════════════════════════════════════════════════════ */
+
+/* ═══ 1. РАЗДЕЛ В МЕНЮ ═══ */
+
+if (!VIEWS.some(v => v[0] === 'channel')) { // добавляем пункт «Канал» сразу после «Публикаций»
+  ICON.channel = '<path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1zM15 9a4 4 0 0 1 0 6M18 6a8 8 0 0 1 0 12"/>';
+  VIEWS.splice(VIEWS.findIndex(v => v[0] === 'publish') + 1, 0, ['channel', 'Канал']);
+}
+
+(function () { // пустая страница раздела (заполняется в chRender)
+  if ($('chn')) return;
+  const sec = h('section', 'view'), box0 = h('div'); sec.dataset.v = 'channel'; sec.hidden = true; box0.id = 'chn'; sec.appendChild(box0);
+  const st = document.querySelector('.view[data-v="settings"]'); st.parentNode.insertBefore(sec, st);
+})();
+
+const setViewBase = setView; // при открытии раздела «Канал» подгружаем свежие данные
+setView = function (v) { setViewBase(v); if (VIEW === 'channel') loadChannel(); };
+
+/* ═══ 2. ЗАГРУЗКА ДАННЫХ ═══ */
+
+let CH = null, CHERR = '', CHBUSY = false, CHSORT = 'new', CHN = 15; // CH — последние загруженные данные
+const CH_MEDIA = { photo: 'фото', video: 'видео', voice: 'голосовое', sticker: 'стикер', poll: 'опрос', file: 'файл' };
+const chNum = n => Number(n || 0).toLocaleString('ru-RU'); // 1234 → 1 234
+const chSnip = (t, n) => { t = String(t || '').replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1) + '…' : t; }; // короткий фрагмент текста
+const chDMY = iso => new Date(iso).toLocaleDateString('ru-RU'); // 31.10.2026
+const chDM = iso => { const d = new Date(iso); return String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0'); }; // 31.10
+
+function loadChannel(force) { // force = true: загрузить заново, не глядя на кэш
+  if (CHBUSY) return;
+  if (CH && !force && Date.now() - CH.t < 300000) { chRender(); return; } // данные моложе 5 минут — не грузим снова
+  CHBUSY = true; CHERR = ''; chRender();
+  Api.call('pultChannelStats')
+    .then(r => {
+      if (!r || r.ok !== true) throw new Error('Сервер не подтвердил загрузку данных канала.');
+      CH = { posts: r.posts || [], daily: r.daily || [], t: Date.now() };
+    })
+    .catch(e => { CHERR = e.message; }) // подробности уже записаны в «Журнал»
+    .finally(() => { CHBUSY = false; chRender(); });
+}
+
+/* ═══ 3. ОТРИСОВКА ═══ */
+
+function chRender() {
+  const e = $('chn'); if (!e) return; e.textContent = '';
+  const act = h('span', 'hact'), rf = h('button', 'b', CHBUSY ? 'Загрузка…' : '↻ Обновить'), op = link('Открыть канал ↗', cfg().tg);
+  rf.type = 'button'; rf.disabled = CHBUSY; rf.onclick = () => loadChannel(true); op.className = 'b'; act.appendChild(rf); act.appendChild(op);
+  e.appendChild(pageHead('Канал', 'Статистика Telegram-канала: посты, просмотры, реакции', act));
+
+  if (!CH) { e.appendChild(h('p', 'empty', CHBUSY ? 'Загружаю данные канала…' : CHERR ? 'Не удалось загрузить данные: ' + CHERR : 'Данных пока нет.')); return; }
+  const P = CH.posts, D = CH.daily; // P — посты (новые сверху), D — подписчики по дням (новые сверху)
+  if (!P.length) { e.appendChild(h('p', 'empty', 'В базе пока нет постов. Сборщик запускается раз в 3 часа.')); return; }
+
+  const views = P.reduce((a, p) => a + (p.views || 0), 0), reacts = P.reduce((a, p) => a + (p.reactions_total || 0), 0);
+  const subs = D.length ? D[0].subscribers : null;
+  let subNote = 'изменение покажем, когда накопится история';
+  if (D.length > 1) { // сравниваем с днём примерно неделю назад
+    const old = D[Math.min(D.length - 1, 7)], d = subs - old.subscribers, days = Math.round((Date.parse(D[0].day) - Date.parse(old.day)) / 864e5);
+    subNote = (d > 0 ? '▲ +' + d : d < 0 ? '▼ ' + d : 'без изменений') + ' за ' + days + ' дн.';
+  }
+
+  const k = h('div', 'kpis'); // четыре главных числа
+  k.appendChild(kpi('Подписчики', subs == null ? '—' : chNum(subs), subNote));
+  k.appendChild(kpi('Постов', chNum(P.length), 'с ' + chDMY(P[P.length - 1].posted_at)));
+  k.appendChild(kpi('Просмотров', chNum(views), 'в среднем ' + chNum(Math.round(views / P.length)) + ' на пост'));
+  k.appendChild(kpi('Реакций', chNum(reacts), 'в среднем ' + (reacts / P.length).toFixed(1).replace('.', ',') + ' на пост'));
+  e.appendChild(k);
+
+  const g = h('div', 'agrid');
+
+  const top = P.reduce((a, p) => ((p.views || 0) > (a.views || 0) ? p : a), P[0]); // пост с наибольшим числом просмотров
+  const c1 = box('Самый популярный пост', 'по просмотрам'), tm = h('div', 'opts'), ln = h('div');
+  c1.appendChild(h('p', null, chSnip(top.body, 240) || '(' + (CH_MEDIA[top.media_kind] || 'без текста') + ')'));
+  tm.style.margin = '10px 0'; tm.appendChild(chip(chNum(top.views) + ' просмотров', 'pub')); tm.appendChild(chip(chNum(top.reactions_total) + ' реакций', 'done')); c1.appendChild(tm);
+  ln.appendChild(small(chDMY(top.posted_at) + ' · ')); ln.appendChild(link('открыть пост ↗', top.url)); c1.appendChild(ln); g.appendChild(c1);
+
+  const last = P.slice(0, 12).reverse(), mx = Math.max(...last.map(p => p.views || 0), 1), bars = h('div', 'bars'); // столбики: 12 последних постов
+  last.forEach(p => {
+    const col = h('div', 'bcol'), w = h('div', 'bw'), b = h('div', 'bb');
+    b.style.height = Math.max(p.views ? 4 : 0, (p.views || 0) / mx * 100) + '%'; if (p.post_id === top.post_id) b.classList.add('now'); b.title = chSnip(p.body, 60);
+    w.appendChild(b); col.appendChild(h('small', null, chNum(p.views))); col.appendChild(w); col.appendChild(h('small', null, chDM(p.posted_at))); bars.appendChild(col);
+  });
+  const c2 = box('Просмотры последних постов', 'от старых к новым', 'span2'); c2.appendChild(bars); g.appendChild(c2);
+
+  const c3 = box('Подписчики по дням');
+  if (D.length < 2) c3.appendChild(h('p', 'empty', 'График появится, когда накопится хотя бы два дня данных. Сейчас подписчиков: ' + (subs == null ? '—' : chNum(subs)) + '.'));
+  else {
+    const pts = D.slice(0, 14).reverse(), vals = pts.map(x => x.subscribers), lo = Math.min(...vals), hi = Math.max(...vals), sb = h('div', 'bars');
+    pts.forEach(x => {
+      const col = h('div', 'bcol'), w = h('div', 'bw'), b = h('div', 'bb'); b.style.height = (hi === lo ? 60 : 15 + (x.subscribers - lo) / (hi - lo) * 85) + '%';
+      w.appendChild(b); col.appendChild(h('small', null, chNum(x.subscribers))); col.appendChild(w); col.appendChild(h('small', null, chDM(x.day))); sb.appendChild(col);
+    });
+    c3.appendChild(sb);
+  }
+  g.appendChild(c3);
+
+  const by = {}; P.forEach(p => Object.keys(p.reactions || {}).forEach(r => { by[r] = (by[r] || 0) + p.reactions[r]; })); // сумма по каждой реакции
+  const parts = Object.keys(by).sort((a, b) => by[b] - by[a]).slice(0, 6).map((r, n) => ({ label: r, value: by[r], color: PAL[n % PAL.length] }));
+  const c4 = box('Какие реакции ставят', 'по всем постам', 'span2');
+  if (parts.length) { const w = h('div', 'dwrap'); w.appendChild(donut(parts, chNum(reacts), 'реакций')); w.appendChild(legend(parts, chNum)); c4.appendChild(w); }
+  else c4.appendChild(h('p', 'empty', 'Реакций пока нет.'));
+  g.appendChild(c4);
+
+  const c5 = box('Посты', P.length + ' шт.', 'wide'), seg = h('div', 'seg'); // таблица всех постов
+  [['new', 'Новые'], ['views', 'По просмотрам'], ['react', 'По реакциям']].forEach(a => {
+    const b = h('button', CHSORT === a[0] ? 'on' : '', a[1]); b.type = 'button'; b.onclick = () => { CHSORT = a[0]; CHN = 15; chRender(); }; seg.appendChild(b);
+  });
+  c5.firstChild.appendChild(seg);
+  const cmp = CHSORT === 'views' ? (a, b) => (b.views || 0) - (a.views || 0) : CHSORT === 'react' ? (a, b) => (b.reactions_total || 0) - (a.reactions_total || 0) : (a, b) => Date.parse(b.posted_at) - Date.parse(a.posted_at);
+  const sorted = P.slice().sort(cmp), tb = h('div', 'tbl'), cols = '1fr 4fr 1fr 1fr';
+  tb.appendChild(trow(cols, ['Дата', 'Пост', 'Просмотры', 'Реакции'], 'thd'));
+  sorted.slice(0, CHN).forEach(p => {
+    const cell = h('div'), em = Object.keys(p.reactions || {}).sort((a, b) => p.reactions[b] - p.reactions[a]).slice(0, 3).join('');
+    cell.appendChild(link(chSnip(p.body, 110) || '(' + (CH_MEDIA[p.media_kind] || 'без текста') + ')', p.url)); if (p.body && p.media_kind) cell.appendChild(small(' · ' + CH_MEDIA[p.media_kind]));
+    tb.appendChild(trow(cols, [chDMY(p.posted_at), cell, chNum(p.views), chNum(p.reactions_total) + (em ? ' ' + em : '')]));
+  });
+  c5.appendChild(tb);
+  if (sorted.length > CHN) { const more = h('button', 'b', 'Показать ещё'); more.type = 'button'; more.style.marginTop = '10px'; more.onclick = () => { CHN += 15; chRender(); }; c5.appendChild(more); }
+  g.appendChild(c5); e.appendChild(g);
+
+  const up = P.reduce((a, p) => (p.updated_at > a ? p.updated_at : a), ''); // когда сборщик обновлял данные в последний раз
+  e.appendChild(h('p', 'note', 'Данные собираются автоматически раз в 3 часа' + (up ? '; последнее обновление: ' + new Date(up).toLocaleString('ru-RU') : '') + '. Альбом из нескольких фото считается одним постом.'));
+}
+
+renderNav(); // показать новый пункт «Канал» в меню
+</script>
