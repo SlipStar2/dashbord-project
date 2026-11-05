@@ -1,0 +1,127 @@
+<style>
+#vehicle-root{color:var(--ink);font-family:"Golos Text",system-ui,sans-serif}
+#vehicle-root *{box-sizing:border-box}
+.v-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin:4px 0 18px}
+.v-title{font:800 26px/1.1 Geologica,sans-serif;text-transform:uppercase;margin:0}
+.v-sub{color:var(--mut);margin:5px 0 0}
+.v-btn{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:9px 13px;font:600 13px "Golos Text",sans-serif;cursor:pointer}
+.v-btn.primary{background:var(--acc);border-color:var(--acc);color:var(--on-acc);font-weight:700}
+.v-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:14px}
+.v-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;min-width:0}
+.v-card h3{font:700 14px Geologica,sans-serif;margin:0 0 12px}
+.v-car{display:flex;gap:14px;align-items:center}
+.v-caricon{width:58px;height:58px;border-radius:14px;background:rgba(255,106,43,.13);color:var(--acc);display:grid;place-items:center;font-size:27px;flex:none}
+.v-carname{font:700 18px Geologica,sans-serif}
+.v-muted{color:var(--mut);font-size:13px}
+.v-stat{font:800 28px/1.1 Geologica,sans-serif;font-variant-numeric:tabular-nums;margin:5px 0}
+.v-stat small{font:400 13px "Golos Text",sans-serif;color:var(--mut)}
+.v-next{border-left:3px solid var(--acc);padding-left:12px;margin:10px 0}
+.v-alert{color:#FFB36D;font-size:13px;margin-top:6px}
+.v-section{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:18px 0 10px}
+.v-section h3{font:700 17px Geologica,sans-serif;margin:0}
+.v-tools{display:flex;gap:8px;flex-wrap:wrap}
+.v-list{display:grid;gap:9px}
+.v-record{display:grid;grid-template-columns:95px minmax(0,1fr) auto;gap:12px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:13px;padding:12px}
+.v-date{color:var(--mut);font-size:12px}
+.v-record-title{font-weight:700;overflow-wrap:anywhere}
+.v-record-meta{color:var(--mut);font-size:12px;margin-top:4px}
+.v-cost{font:700 15px Geologica,sans-serif;text-align:right;white-space:nowrap}
+.v-actions{display:flex;gap:5px;margin-top:5px;justify-content:flex-end}
+.v-actions button{background:none;border:0;color:var(--mut);cursor:pointer;font-size:12px;padding:3px}
+.v-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.v-field{display:block;min-width:0}
+.v-field.full{grid-column:1/-1}
+.v-field span{display:block;color:var(--mut);font-size:12px;margin-bottom:5px}
+.v-field input,.v-field select,.v-field textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:9px;color:var(--ink);padding:10px 11px;font:400 15px "Golos Text",sans-serif}
+.v-field textarea{min-height:72px;resize:vertical}
+.v-form-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:14px}
+.v-empty{padding:20px;text-align:center;color:var(--mut);border:1px dashed var(--line);border-radius:12px}
+.v-filter{background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:9px;padding:8px 10px}
+@media(max-width:800px){.v-grid{grid-template-columns:1fr}.v-record{grid-template-columns:1fr auto}.v-date{grid-column:1/-1}.v-record-main{min-width:0}.v-form{grid-template-columns:1fr}.v-field.full{grid-column:auto}}
+</style>
+<script>
+(function(){
+'use strict';
+const V = { records:[], car:{}, ready:false, editing:null, originalRenderNav:null, originalSetView:null };
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const money = n => (Number(n)||0).toLocaleString('ru-RU') + ' ₽';
+const num = n => (Number(n)||0).toLocaleString('ru-RU');
+const today = () => { const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+const dateRu = s => { if(!s)return '—'; const p=String(s).split('-'); return p.length===3?p[2]+'.'+p[1]+'.'+p[0]:s; };
+function toast(t){const el=document.getElementById('toast');if(el)el.textContent=t;}
+function call(name,arg){return new Promise((resolve,reject)=>{if(!window.google||!window.google.script||!window.google.script.run)return reject(new Error('Откройте приложение через URL Apps Script /exec.'));google.script.run.withSuccessHandler(resolve).withFailureHandler(e=>reject(new Error(e&&e.message||e)))[name](arg);});}
+function root(){let r=$('vehicle-root');if(!r){r=document.createElement('section');r.id='vehicle-root';r.className='view';r.dataset.v='vehicle';r.hidden=true;const main=document.querySelector('.main');main.appendChild(r);}return r;}
+function navButton(){const nav=$('nav');if(!nav||nav.querySelector('[data-vehicle-nav]'))return;const b=document.createElement('button');b.type='button';b.dataset.vehicleNav='1';b.title='Автомобиль';b.innerHTML='<span class="ic">🚘</span><span class="lb">Автомобиль</span>';b.onclick=()=>setView('vehicle');nav.appendChild(b);}
+function installNavHooks(){
+ if(typeof renderNav==='function'&&!V.originalRenderNav){V.originalRenderNav=renderNav;renderNav=function(){V.originalRenderNav();navButton();const b=$('nav').querySelector('[data-vehicle-nav]');if(b)b.classList.toggle('on',VIEW==='vehicle');};}
+ if(typeof setView==='function'&&!V.originalSetView){V.originalSetView=setView;setView=function(id){if(id==='vehicle'){VIEW='vehicle';document.querySelectorAll('.view').forEach(x=>x.hidden=x.dataset.v!=='vehicle');renderNav();scrollTo(0,0);load();return;}V.originalSetView(id);};}
+ navButton();
+}
+function init(){
+ root();installNavHooks();
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',installNavHooks);
+ load();
+}
+function load(){
+ if(V.loading)return;V.loading=true;const r=root();r.innerHTML='<div class="v-card">Загружаю журнал автомобиля…</div>';
+ call('vehicleGetData').then(data=>{
+   if(!data||!data.ok){if(data&&data.setupRequired){r.innerHTML='<div class="v-card"><h3>Нужно подготовить листы</h3><p class="v-muted">В редакторе Apps Script выберите функцию <b>vehicleSetup</b> и нажмите «Выполнить» один раз.</p></div>';return;}throw new Error(data&&data.message||'Не удалось загрузить данные');}
+   V.car=data.car||{};V.records=data.records||[];V.ready=true;render();
+ }).catch(e=>{r.innerHTML='<div class="v-card"><h3>Не удалось загрузить журнал</h3><p class="v-muted">'+esc(e.message)+'</p><button class="v-btn" id="v-retry">Повторить</button></div>';const b=$('v-retry');if(b)b.onclick=load;})
+ .finally(()=>{V.loading=false;});
+}
+function dueRecords(){
+ const odo=Number(V.car.odometer)||0, now=today();
+ return V.records.filter(x=>(x.nextOdometer&&odo&&Number(x.nextOdometer)<=odo)||(x.nextDate&&x.nextDate<=now));
+}
+function render(){
+ const r=root(), car=V.car||{}, records=V.records||[], total=records.reduce((s,x)=>s+(Number(x.cost)||0),0), due=dueRecords();
+ r.innerHTML='<div class="v-head"><div><h2 class="v-title">Автомобиль</h2><p class="v-sub">Журнал обслуживания, пробег и расходы</p></div><div class="v-tools"><button class="v-btn" id="v-edit-car">Профиль авто</button><button class="v-btn primary" id="v-add">+ Запись обслуживания</button></div></div>'+
+ '<div class="v-grid"><section class="v-card"><div class="v-car"><div class="v-caricon">🚘</div><div><div class="v-carname">'+esc(car.name||'Автомобиль')+' '+esc(car.year||'')+'</div><div class="v-muted">'+esc(car.plate||'Госномер не указан')+' · '+esc(car.engine||'Двигатель не указан')+'</div></div></div><div class="v-next"><div class="v-muted">Текущий пробег</div><div class="v-stat">'+(car.odometer?num(car.odometer):'—')+' <small>км</small></div><div class="v-muted">VIN: '+esc(car.vin||'не указан')+'</div></div></section>'+
+ '<section class="v-card"><h3>Обслуживание и расходы</h3><div class="v-stat">'+records.length+' <small>записей</small></div><div class="v-muted">Всего по журналу</div><div class="v-stat">'+money(total)+'</div><div class="v-muted">Суммарные расходы на обслуживание</div></section>'+
+ '<section class="v-card"><h3>Следующее обслуживание</h3>'+(due.length?'<div class="v-alert">Есть просроченные или наступившие напоминания</div>'+due.slice(0,3).map(x=>'<div class="v-next"><b>'+esc(x.title)+'</b><div class="v-muted">'+(x.nextDate?'Дата: '+dateRu(x.nextDate):'')+(x.nextOdometer?' · '+num(x.nextOdometer)+' км':'')+'</div></div>').join(''):'<div class="v-muted">Нет наступивших напоминаний. Добавьте интервал следующего обслуживания в запись.</div>')+'</section></div>'+
+ '<div class="v-section"><h3>История обслуживания</h3><div class="v-tools"><select class="v-filter" id="v-filter"><option value="all">Все категории</option>'+['Масло','Фильтры','Шины','Тормоза','Ремонт','Другое'].map(x=>'<option>'+x+'</option>').join('')+'</select><button class="v-btn" id="v-refresh">Обновить</button></div></div><div class="v-list" id="v-list"></div>';
+ $('v-add').onclick=()=>form();$('v-edit-car').onclick=()=>carForm();$('v-refresh').onclick=load;$('v-filter').onchange=drawList;drawList();
+}
+function drawList(){
+ const list=$('v-list');if(!list)return;const f=$('v-filter').value,rows=V.records.filter(x=>f==='all'||x.category===f);
+ if(!rows.length){list.innerHTML='<div class="v-empty">Записей пока нет. Добавь замену масла, шин или другое обслуживание.</div>';return;}
+ list.innerHTML=rows.map(x=>'<article class="v-record"><div class="v-date">'+dateRu(x.date)+'<br>'+num(x.odometer)+' км</div><div class="v-record-main"><div class="v-record-title">'+esc(x.title)+'</div><div class="v-record-meta">'+esc(x.category)+(x.note?' · '+esc(x.note):'')+'</div>'+(x.nextDate||x.nextOdometer?'<div class="v-record-meta">Следующее: '+(x.nextDate?dateRu(x.nextDate):'')+(x.nextOdometer?' · '+num(x.nextOdometer)+' км':'')+'</div>':'')+'</div><div><div class="v-cost">'+money(x.cost)+'</div><div class="v-actions"><button data-edit="'+esc(x.id)+'">Изменить</button><button data-delete="'+esc(x.id)+'">Удалить</button></div></div></article>').join('');
+ list.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>form(V.records.find(x=>x.id===b.dataset.edit)));
+ list.querySelectorAll('[data-delete]').forEach(b=>b.onclick=()=>{const x=V.records.find(y=>y.id===b.dataset.delete);if(x&&confirm('Удалить запись «'+x.title+'»?'))call('vehicleDeleteRecord',x.id).then(load).catch(e=>toast(e.message));});
+}
+function field(label,id,value,type,extra){return '<label class="v-field '+(extra||'')+'"><span>'+label+'</span><input id="'+id+'" type="'+(type||'text')+'" value="'+esc(value==null?'':value)+'"></label>';}
+function form(x){
+ V.editing=x||null;const r=root();const rec=x||{date:today(),odometer:V.car.odometer||'',category:'Масло',title:'',cost:'',nextDate:'',nextOdometer:'',note:''};
+ r.innerHTML='<div class="v-head"><div><h2 class="v-title">'+(x?'Изменить запись':'Новое обслуживание')+'</h2><p class="v-sub">Дата и пробег фиксируют историю; следующее обслуживание можно задать по дате и/или километрам.</p></div><button class="v-btn" id="v-back">← К журналу</button></div><section class="v-card"><div class="v-form">'+
+ field('Дата обслуживания','vf-date',rec.date,'date')+field('Пробег, км','vf-odo',rec.odometer,'number')+
+ '<label class="v-field"><span>Категория</span><select id="vf-category">'+['Масло','Фильтры','Шины','Тормоза','Ремонт','Другое'].map(c=>'<option '+(c===rec.category?'selected':'')+'>'+c+'</option>').join('')+'</select></label>'+
+ field('Работа / деталь','vf-title',rec.title,'text')+field('Стоимость, ₽','vf-cost',rec.cost,'number')+field('Следующая дата','vf-nextdate',rec.nextDate,'date')+
+ field('Следующий пробег, км','vf-nextodo',rec.nextOdometer,'number')+'<label class="v-field full"><span>Комментарий, сервис, детали, артикулы</span><textarea id="vf-note">'+esc(rec.note||'')+'</textarea></label></div><div class="v-form-actions"><button class="v-btn" id="vf-cancel">Отмена</button><button class="v-btn primary" id="vf-save">Сохранить запись</button></div></section>';
+ $('v-back').onclick=render;$('vf-cancel').onclick=render;$('vf-save').onclick=saveRecord;
+}
+function saveRecord(){
+ const rec={id:V.editing&&V.editing.id||'',date:$('vf-date').value,odometer:$('vf-odo').value,category:$('vf-category').value,title:$('vf-title').value.trim(),cost:$('vf-cost').value,nextDate:$('vf-nextdate').value,nextOdometer:$('vf-nextodo').value,note:$('vf-note').value.trim()};
+ if(!rec.date||rec.odometer===''||!rec.title){toast('Заполни дату, пробег и название работы.');return;}
+ $('vf-save').disabled=true;$('vf-save').textContent='Сохраняю…';
+ call('vehicleSaveRecord',rec).then(()=>{toast('Запись сохранена в Google Таблицу.');load();}).catch(e=>{toast('Ошибка сохранения: '+e.message);$('vf-save').disabled=false;$('vf-save').textContent='Сохранить запись';});
+}
+function carForm(){
+ const c=V.car||{};const r=root();
+ r.innerHTML='<div class="v-head"><div><h2 class="v-title">Профиль автомобиля</h2><p class="v-sub">Эти сведения хранятся в листе «Автомобиль».</p></div><button class="v-btn" id="vc-back">← К журналу</button></div><section class="v-card"><div class="v-form">'+
+ field('Марка и модель','vc-name',c.name,'text')+field('Год','vc-year',c.year,'number')+field('Госномер','vc-plate',c.plate,'text')+field('VIN','vc-vin',c.vin,'text')+field('Двигатель','vc-engine',c.engine,'text')+field('Текущий пробег, км','vc-odo',c.odometer,'number')+
+ '</div><div class="v-form-actions"><button class="v-btn" id="vc-cancel">Отмена</button><button class="v-btn primary" id="vc-save">Сохранить автомобиль</button></div></section>';
+ $('vc-back').onclick=render;$('vc-cancel').onclick=render;$('vc-save').onclick=()=>{
+ const car={name:$('vc-name').value.trim(),year:$('vc-year').value,plate:$('vc-plate').value.trim(),vin:$('vc-vin').value.trim(),engine:$('vc-engine').value.trim(),odometer:$('vc-odo').value};
+ call('vehicleSaveCar',car).then(load).catch(e=>toast(e.message));
+ };
+}
+function installNav(){
+ if(typeof renderNav==='function'&&!V.originalRenderNav){V.originalRenderNav=renderNav;renderNav=function(){V.originalRenderNav();navButton();const b=$('nav').querySelector('[data-vehicle-nav]');if(b)b.classList.toggle('on',VIEW==='vehicle');};}
+ if(typeof setView==='function'&&!V.originalSetView){V.originalSetView=setView;setView=function(id){if(id==='vehicle'){VIEW='vehicle';document.querySelectorAll('.view').forEach(x=>x.hidden=x.dataset.v!=='vehicle');renderNav();scrollTo(0,0);load();return;}V.originalSetView(id);};}
+ navButton();
+}
+init();
+})();
+</script>
