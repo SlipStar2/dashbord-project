@@ -220,8 +220,48 @@ function renderDashboardMetrics() {                          // динамиче
     card.append(icon, label, value, foot); host.appendChild(card);
   });
 }
+function renderHomeExtras() {
+  const workHost = $('dashWorkBody'); if (!workHost) return;
+  workHost.textContent = '';
+  const working = S.ideas.filter(i => i.st === 'work');
+  if (!working.length) workHost.appendChild(h('p','empty','Пока нет активного проекта. Выберите идею и начните работу.'));
+  working.slice(0,2).forEach(i => {
+    const card=h('div','work-feature'), cover=h('div','work-cover');
+    if (coverOf(i)) cover.style.backgroundImage='url("'+String(coverOf(i)).replace(/"/g,'%22')+'")';
+    else cover.textContent=(i.title||'П')[0].toUpperCase();
+    const body=h('div'), title=h('b',null,i.title||'Без названия'), desc=h('p',null,i.desc||i.cat||'Проект в работе');
+    const bar=h('div','bar'), fill=h('i'); fill.style.width=pctOf(i)+'%'; bar.appendChild(fill);
+    const pct=h('div','pct',pctOf(i)+'% готово');
+    const open=h('button','b','Открыть проект →'); open.type='button'; open.onclick=()=>openIdea(i.id);
+    body.append(title,desc,bar,pct,open); card.append(cover,body); workHost.appendChild(card);
+  });
+  const notesHost=$('dashNotesBody'); if(notesHost) {
+    notesHost.textContent='';
+    const notes=[]; (S.ideas||[]).forEach(i=>(i.tasks||[]).forEach(n=>notes.push({i,n})));
+    notes.sort((a,b)=>String(b.n.d||'').localeCompare(String(a.n.d||'')));
+    if(!notes.length) notesHost.appendChild(h('p','empty','Заметок пока нет.'));
+    notes.slice(0,4).forEach(({i,n})=>{const r=row(),t=h('div','t',n.t||'Заметка');t.appendChild(small(i.title||'Проект'));r.appendChild(t);r.appendChild(chip(n.status==='done'?'Готово':'В работе',n.status==='done'?'done':'work'));notesHost.appendChild(r);});
+  }
+  const expHost=$('dashExpenseBody'); if(expHost) {
+    expHost.textContent='';
+    const exps=(S.exp||[]).concat(...(S.ideas||[]).map(i=>i.expenses||[]));
+    const total=exps.reduce((sum,x)=>sum+(Number(x.amount)||0),0);
+    const top=h('div','tot',total.toLocaleString('ru-RU')+' ₽'); expHost.appendChild(top);
+    if(!exps.length) expHost.appendChild(h('p','empty','Расходов пока нет — они появятся после добавления в проект.'));
+    const by={}; exps.forEach(x=>{const key=x.category||x.cat||x.label||'Другое';by[key]=(by[key]||0)+(Number(x.amount)||0);});
+    Object.keys(by).sort((a,b)=>by[b]-by[a]).slice(0,4).forEach(k=>{const line=h('div','expense-line');line.append(h('span',null,k),h('b',null,by[k].toLocaleString('ru-RU')+' ₽'));expHost.appendChild(line);});
+  }
+  const stats=$('dashStatsBody'); if(stats) {
+    stats.textContent='';
+    const allNotes=(S.ideas||[]).reduce((n,i)=>n+(i.notes||[]).length,0);
+    [['Проекты',S.ideas.length],['Заметки',allNotes],['Идеи',S.items.length+S.ideas.filter(i=>i.st==='idea').length],['Расходы',(S.exp||[]).length],['Черновики',S.drafts.length]].forEach(([label,value])=>{
+      const r=row(),t=h('div','t',label),v=h('small',null,String(value));r.append(t,v);stats.appendChild(r);
+    });
+  }
+  const sync=$('dashSync'); if(sync){sync.textContent=$('sync').textContent||'Система работает';}
+}
 function render() {                                              // перерисовать все разделы (без сохранения)
-  renderToday(); renderDashboardMetrics(); renderActive(); renderNearest(); renderActivity(); renderTasks();
+  renderToday(); renderDashboardMetrics(); renderActive(); renderNearest(); renderActivity(); renderTasks(); renderHomeExtras();
   renderChannels(); renderBoard(); renderExpenses(); renderInbox(); renderProjects(); renderSettings();
 }
 function draw() {                                                 // перерисовать всё и сохранить
