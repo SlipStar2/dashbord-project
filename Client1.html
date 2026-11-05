@@ -196,8 +196,32 @@ const Store = {
 };
 
 /* ═══ 5. КАРТОЧКИ ДАШБОРДА ═══ */
+function renderDashboardMetrics() {                          // динамические показатели для нового главного экрана
+  const host = $('dashMetrics'); if (!host) return;
+  host.textContent = '';
+  const ideas = S.ideas || [];
+  const active = ideas.filter(i => i.st === 'work');
+  const openTasks = active.reduce((n, i) => n + (i.tasks || []).filter(t => t.status !== 'done').length, 0);
+  const newIdeas = ideas.filter(i => i.st === 'idea' || i.st === 'new').length;
+  const ready = ideas.filter(i => i.st === 'ready' || i.st === 'done').length;
+  const metrics = [
+    ['Активные проекты', active.length, 'В работе', '#FF6A2B', '▣'],
+    ['Открытые задачи', openTasks, 'Ожидают выполнения', '#4C8DFF', '☑'],
+    ['Новые идеи', newIdeas, 'Входящий поток', '#B592FF', '✦'],
+    ['Готовые проекты', ready, 'Результаты', '#4CC38A', '✓']
+  ];
+  metrics.forEach(m => {
+    const card = h('article', 'dash-kpi');
+    card.style.setProperty('--kpi', m[3]);
+    const icon = h('span', 'kpi-icon', m[4]);
+    const label = h('span', 'kpi-label', m[0]);
+    const value = h('b', 'kpi-value', String(m[1]));
+    const foot = h('small', 'kpi-foot', m[2]);
+    card.append(icon, label, value, foot); host.appendChild(card);
+  });
+}
 function render() {                                              // перерисовать все разделы (без сохранения)
-  renderToday(); renderActive(); renderNearest(); renderActivity(); renderTasks();
+  renderToday(); renderDashboardMetrics(); renderActive(); renderNearest(); renderActivity(); renderTasks();
   renderChannels(); renderBoard(); renderExpenses(); renderInbox(); renderProjects(); renderSettings();
 }
 function draw() {                                                 // перерисовать всё и сохранить
