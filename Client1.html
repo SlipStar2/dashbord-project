@@ -1,0 +1,341 @@
+<script>
+
+'use strict';
+/* ══════════════════════════════════════════════════════════════════
+   ПУЛЬТ — клиентская часть. Содержание (ищите по заголовкам «═══»):
+   1. Помощники   2. Модель данных (класс Idea)   3. Связь с Google (Api)
+   4. Хранилище (Store)   5. Карточки дашборда   6. Окна   7. Запуск
+   Жизненный путь идеи: Идея → В работе → Готово → Опубликовано.
+   Финальная часть (пост для каналов) открывается только на «Готово».
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ═══ 1. ПОМОЩНИКИ ═══ */
+const K = 'pult-v2';                                              // ключ резервной копии в браузере
+const $ = id => document.getElementById(id);                      // найти элемент на странице по id
+const uid = () => Math.random().toString(36).slice(2, 9);         // короткий уникальный номер записи
+const ISO = new Date().toISOString().slice(0, 10);                // сегодня как 2026-10-31 (для расходов)
+const RU = () => new Date().toLocaleDateString('ru-RU');          // сегодня как 31.10.2026 (для заметок)
+const msg = t => { $('toast').textContent = t; };                 // сообщение под строкой команд
+const say = t => { msg(t); const e = $('mm'); if (e) e.textContent = t; }; // то же + в открытом окне (абзац #mm)
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); // безопасный текст для HTML
+const on = (id, fn) => { $(id).onclick = fn; };                   // повесить действие на кнопку по id
+function h(tag, cls, text) {                                      // создать HTML-элемент
+  const n = document.createElement(tag);                          // новый элемент нужного тега
+  if (cls) n.className = cls;                                     // css-класс
+  if (text != null) n.textContent = text;                         // текст (безопасно)
+  return n;
+}
+const small = t => h('small', null, t);                           // мелкий серый текст
+const row = cls => h('div', 'row' + (cls ? ' ' + cls : ''));      // строка списка
+const chip = (label, state, asBtn) => {                           // цветная метка; state задаёт цвет (work/done/pub/pause)
+  const n = h(asBtn ? 'button' : 'span', 'chip', label);
+  n.dataset.s = state;
+  if (asBtn) n.type = 'button';
+  return n;
+};
+const link = (t, url) => { const a = h('a', null, t); a.href = url; a.target = '_blank'; a.rel = 'noopener'; return a; }; // ссылка в новой вкладке
+const head = (t, extra) => { const x = h('h2', null, t); if (extra) x.appendChild(extra); return x; };                      // заголовок карточки
+const copyText = t => navigator.clipboard.writeText(t).then(() => say('Скопировано'), () => say('Не удалось скопировать — выделите текст вручную'));
+
+/* ═══ 2. МОДЕЛЬ ДАННЫХ ═══ */
+const STAGES = [                                                  // состояния идеи (порядок = порядок на доске)
+  { id: 'idea', name: 'Идея' }, { id: 'work', name: 'В работе' },
+  { id: 'done', name: 'Готово' }, { id: 'pub', name: 'Опубликовано' }];
+let CATS = ['3D-печать', 'Arduino', 'ИИ', 'Машина', 'Сайт', 'Другое']; // виды идей (позже заменим на ввод вручную)
+const NOTE_STATUS = { todo: 'ожидает работы', done: 'выполнено' };        // статусы заметки
+const PROJ_STATUS = { none: 'без статуса', idea: 'идея', work: 'в работе', pause: 'пауза', done: 'готово' }; // статусы сайтов
+const DEST = { tg: 'Telegram', vk: 'ВКонтакте' };                          // куда можно публиковать
+
+class Idea {                                                      // одна идея / проект
+  constructor(d = {}) {                                           // d — сырые данные из таблицы (или пусто)
+    this.id = d.id || uid();                                      // уникальный номер
+    this.cat = d.cat || 'Другое';                                 // вид идеи
+    this.title = d.title || '';                                   // название
+    this.desc = d.desc || '';                                     // описание
+    this.parts = d.parts || '';                                   // запчасти / коды
+    this.cost = d.cost || '';                                     // расчётная стоимость
+    this.links = d.links || '';                                   // ссылки на маркетплейсы
+    this.st = STAGES.some(s => s.id === d.st) ? d.st : 'idea';    // текущее состояние
+    this.notes = (d.notes || []).map(n => ({                      // заметки: у каждой текст, дата, статус
+      id: n.id || uid(), t: n.t || n.text || '', d: n.d || '', status: n.status === 'done' ? 'done' : 'todo',
+      kind: n.kind === 'code' ? 'code' : '', name: n.name || '', code: n.code || '' })); // kind:'code' — скрытый фрагмент кода
+    this.photos = d.photos || [];                                 // фото (ссылки на Google Диск)
+    this.expenses = d.expenses || [];                             // затраты по проекту
+    this.summary = d.summary || '';
+    this.cover = d.cover || '';                                   // картинка-превью проекта (ссылка)                               // сводка заметок от Gemini
+    this.text = d.text || '';                                     // финальный текст поста
+    this.published = d.published || {};                           // где и когда опубликовано {tg:'31.10.2026'}
+  }
+  get stage() { return STAGES.find(s => s.id === this.st); }      // объект текущего состояния
+  get tasks() { return this.notes.filter(n => n.kind !== 'code'); }      // обычные заметки
+  get codes() { return this.notes.filter(n => n.kind === 'code'); }      // фрагменты кода
+  get pending() { return this.tasks.filter(n => n.status !== 'done').length; } // сколько заметок ждёт работы
+  get spent() { return this.expenses.reduce((a, x) => a + (Number(x.amount) || 0), 0); } // сумма затрат
+  meta() {                                                        // строка-подпись для карточки на доске
+    return [this.cost,
+      this.tasks.length ? `заметки ${this.tasks.length - this.pending}/${this.tasks.length}` : '',
+      this.photos.length ? this.photos.length + ' фото' : '',
+      this.spent ? 'потрачено ' + this.spent.toLocaleString('ru-RU') + ' ₽' : '',
+      Object.keys(this.published).map(k => DEST[k]).join(', ')].filter(Boolean).join(' · ') || 'пока без заметок';
+  }
+  forAI() {                                                       // что отправляем в Gemini
+    return { title: this.title, category: this.cat, stage: this.stage.name, description: this.desc,
+      parts: this.parts, estimatedCost: this.cost, links: this.links,
+      notes: this.tasks.map(n => ({ date: n.d, text: n.t, status: NOTE_STATUS[n.status] })), codeSnippets: this.codes.map(c => c.name),
+      expenses: this.expenses.map(x => ({ label: x.label, amount: x.amount })), totalSpent: this.spent };
+  }
+}
+
+/* ═══ ЖУРНАЛ И ОШИБКИ ═══ */
+const FIXES = [                                                   // [что искать в тексте ошибки, заголовок, как исправить] — первое совпадение побеждает
+  [/google is not defined|google\.script/i, 'Страница открыта вне Google', 'Откройте Пульт по ссылке веб-приложения (адрес заканчивается на /exec), а не файл Index.html. Если ссылки нет: Apps Script → Развернуть → Управление развёртываниями.'],
+  [/не ответил за/i, 'Сервер Google отвечает слишком долго', 'Откройте Apps Script → «Выполнения»: там виден запуск pultLoadState и его ошибка. Проверьте SPREADSHEET_ID в Code.gs и что веб-приложение развёрнуто новой версией, затем нажмите ↻.'],
+  [/authorization is required|not authorized|нужно разрешение/i, 'Нужны разрешения Google', 'В редакторе Apps Script запустите любую функцию, нажмите «Разрешить доступ», затем обновите развёртывание (новая версия) и страницу.'],
+  [/group auth/i, 'ВКонтакте: токен сообщества не умеет загружать фото', 'Добавьте в Свойства скрипта VK_USER_TOKEN: токен администратора сообщества с правами photos, wall, groups, offline. Пока его нет, посты во ВК уходят без фото.'],
+  [/ВКонтакте/, 'Ошибка ВКонтакте', 'Проверьте VK_ACCESS_TOKEN и VK_GROUP_ID в Свойствах скрипта: токен должен быть от этого сообщества и иметь право на стену. Точная причина указана в тексте ошибки.'],
+  [/chat not found/i, 'Telegram: канал не найден', 'Проверьте TELEGRAM_CHANNEL_ID: для публичного канала @di_ero, для закрытого число вида -100…. Бот должен быть добавлен в канал.'],
+  [/not enough rights|forbidden|kicked|can.t post/i, 'Telegram: у бота нет прав', 'Сделайте бота администратором канала с правом публиковать сообщения.'],
+  [/too long/i, 'Слишком длинный текст', 'Лимит Telegram — 4096 знаков на сообщение. Сократите пост.'],
+  [/Telegram/, 'Ошибка Telegram', 'Проверьте TELEGRAM_BOT_TOKEN и TELEGRAM_CHANNEL_ID в Свойствах скрипта. Точная причина указана в тексте ошибки.'],
+  [/GEMINI_API_KEY|api key not valid|API_KEY_INVALID/i, 'Проблема с ключом Gemini', 'Задайте или обновите GEMINI_API_KEY в Свойствах скрипта (ключ из Google AI Studio).'],
+  [/quota|429|RESOURCE_EXHAUSTED|rate limit/i, 'Лимит Gemini исчерпан', 'Бесплатный лимит закончился. Подождите несколько минут (или до завтра) и повторите.'],
+  [/Gemini|models\//i, 'Gemini не ответил', 'Повторите запрос. Если ошибка остаётся — проверьте GEMINI_API_KEY и название модели в функции pultGenerateText (Code.gs).'],
+  [/No item with the given ID|file not found|файл не найден/i, 'Файл не найден на Google Диске', 'Фото удалено или недоступно. Уберите его из карточки (×) и загрузите заново.'],
+  [/прочитать изображение/i, 'Формат фото не поддерживается', 'Сохраните снимок как JPG или PNG и загрузите снова (форматы вроде HEIC браузер не читает).'],
+  [/Service invoked too many times|Exceeded maximum execution time|too many/i, 'Лимит Google Apps Script', 'Достигнут суточный или минутный лимит Google. Подождите и повторите.'],
+  [/setupPult|PULT_|Spreadsheet|таблиц/i, 'Не настроена таблица', 'В Apps Script запустите функцию setupPult(): она создаёт таблицу и папку на Диске. Затем обновите страницу.'],
+  [/failed to fetch|network|load failed|timeout/i, 'Нет связи', 'Проверьте интернет и нажмите «↻ Обновить».'],
+  [/./, 'Что-то пошло не так', 'Нажмите «↻ Обновить». Если ошибка повторяется, откройте «Журнал» и скопируйте её текст.']
+];
+const Log = {
+  items: [],                                                      // записи журнала: {t — время, lvl — info/ok/error, text, fix}
+  add(lvl, text, fix) {                                           // добавить запись
+    this.items.unshift({ t: new Date().toLocaleTimeString('ru-RU'), lvl, text: String(text), fix: fix || '' });
+    this.items.length = Math.min(this.items.length, 150);         // храним не больше 150 записей
+    renderLog();
+  },
+  error(context, err) {                                           // записать ошибку и показать окно справа внизу с решением
+    const text = (err && err.message) || String(err), f = FIXES.find(x => x[0].test(text));
+    this.add('error', context + ': ' + text, f[1] + ' — ' + f[2]);
+    notify(f[1], context + ': ' + text, f[2]);
+  }
+};
+function notify(title, text, fix) {                               // всплывающее окно с ошибкой (справа внизу)
+  const box = $('alerts'), key = title + text;
+  if ([...box.children].some(c => c.dataset.k === key)) return;  // одинаковую ошибку не дублируем
+  const n = h('div', 'alert'); n.dataset.k = key; n.setAttribute('role', 'alert');
+  n.appendChild(h('b', null, title)); n.appendChild(h('p', null, text)); n.appendChild(h('p', 'fix', 'Как исправить: ' + fix));
+  const x = h('button', 'x', '×'); x.type = 'button'; x.setAttribute('aria-label', 'Закрыть'); x.onclick = () => n.remove(); n.appendChild(x);
+  box.appendChild(n); while (box.children.length > 3) box.firstChild.remove(); // показываем не больше трёх окон
+}
+function renderLog() {                                            // перерисовать панель «Журнал»
+  const p = $('logl'); p.textContent = '';
+  Log.items.forEach(e => {
+    const r = row(), t = h('div', 't', e.text); r.appendChild(chip(e.t, e.lvl === 'error' ? 'err' : e.lvl === 'ok' ? 'done' : 'x'));
+    if (e.fix) t.appendChild(small('Как исправить: ' + e.fix)); r.appendChild(t); p.appendChild(r);
+  });
+  if (!Log.items.length) p.appendChild(h('p', 'empty', 'Журнал пуст'));
+  renderNav(); renderActivity();
+}
+
+/* ═══ 3. СВЯЗЬ С GOOGLE ═══ */
+const Api = {                                                     // вызов функций из Code.gs
+  call(fn, ...args) {                                             // fn — имя функции в Code.gs
+    return new Promise((ok, fail) => google.script.run
+      .withSuccessHandler(ok)                                     // успех → resolve
+      .withFailureHandler(e => fail(new Error((e && e.message) || e))) // ошибка → reject
+      [fn](...args))
+      .catch(err => { Log.error('«' + fn + '»', err); throw err; }); // ошибка → журнал + окно с решением
+  }
+};
+const ai = (kind, payload, done) => {                             // Gemini: kind = desc | summary | post
+  say('Gemini думает…');
+  Api.call('pultGenerateText', kind, payload).then(t => { say('Готово. Проверьте текст и поправьте под себя'); Log.add('ok', 'Gemini: текст получен (' + kind + ')'); done(t); })
+    .catch(e => say('Gemini: ' + e.message));
+};
+
+/* ═══ 4. ХРАНИЛИЩЕ ═══ */
+let S = { items: [], drafts: [], exp: [], proj: [], ideas: [], globalSummary: '' }; // всё состояние Пульта
+const Store = {
+  ready: false, timer: null, busy: false, again: false,           // ready — данные из таблицы уже загружены
+  fill(raw) {                                                     // принять данные (или создать стартовые)
+    S = Object.assign({ items: [], drafts: [], exp: [], proj: [], ideas: [], globalSummary: '' }, raw || {});
+    if (!raw) {                                                   // первый запуск: стартовые записи
+      S.ideas = [
+        { title: 'Пейджер на Arduino', cat: 'Arduino', desc: 'Создать пейджер, который будет принимать сообщения из Telegram (траты на плату, провода, на бота и т.д.)', parts: 'Arduino, экран, кнопки навигации, код', cost: '~2000 руб.' },
+        { title: 'Дашборд', cat: 'Сайт', desc: 'Создать дашборд для себя, на котором будет вся информация.' }];
+      S.proj = [
+        { n: 'Forest Gesh', u: 'https://forest-gesh.gt.tc/' }, { n: 'Project Slipstar', u: 'https://projectslipstar.gt.tc/' },
+        { n: 'Evraz Dashboard', u: 'https://dmitryerosh.github.io/evraz-dashboard/index.html' },
+        { n: 'Барабаны сепараторов', u: 'https://dmitryerosh.github.io/Seporator/', d: 'Учёт барабанов, замены и история. Данные в Google Таблице' }];
+    }
+    S.ideas = S.ideas.map(d => new Idea(d));                      // превращаем данные в объекты Idea
+    S.proj.forEach(p => { p.id = p.id || uid(); p.st = p.st || 'none'; }); // у каждого проекта есть id и статус
+    ['items', 'drafts', 'exp'].forEach(k => S[k].forEach(x => { x.id = x.id || uid(); }));
+    S.settings = Object.assign(JSON.parse(JSON.stringify(DEF)), (raw && raw.settings) || {}); applySettings(); // настройки сайта // и у остальных записей
+  },
+  sync(text, state) { $('sync').textContent = text; $('sync').dataset.s = state; }, // индикатор сохранения
+  save() {                                                        // локально запоминаем, но в таблицу пишем только после успешной загрузки
+    try { localStorage.setItem(K, JSON.stringify(S)); } catch (e) { /* память браузера может быть недоступна */ }
+    clearTimeout(this.timer);
+    if (!this.ready) return;                                      // не ставим серверную запись в очередь при недостоверном состоянии
+    this.timer = setTimeout(() => this.push(), 450);
+  },
+  push() {                                                        // отправить в Google Таблицу
+    if (!this.ready) return;                                      // загрузка не подтверждена — запрещаем перезапись
+    if (this.busy) { this.again = true; return; }
+    this.busy = true; this.sync('Сохраняю…', 'work');
+    Api.call('pultSaveState', JSON.parse(JSON.stringify(S)))
+      .then(result => {
+        if (!result || result.ok !== true) throw new Error('Сервер не подтвердил сохранение.');
+        this.sync('Сохранено в таблице', 'done'); Log.add('ok', 'Сохранено в таблице');
+      })
+      .catch(e => { this.sync('Ошибка сохранения', 'pause'); msg('Ошибка сохранения: ' + e.message); Log.error('Сохранение', e); })
+      .finally(() => { this.busy = false; if (this.again && this.ready) { this.again = false; this.push(); } else this.again = false; });
+  }
+};
+
+/* ═══ 5. КАРТОЧКИ ДАШБОРДА ═══ */
+function render() {                                              // перерисовать все разделы (без сохранения)
+  renderToday(); renderActive(); renderNearest(); renderActivity(); renderTasks();
+  renderChannels(); renderBoard(); renderExpenses(); renderInbox(); renderProjects(); renderSettings();
+}
+function draw() {                                                 // перерисовать всё и сохранить
+  render();
+  $('clr').hidden = ![S.items, S.drafts, S.exp].some(a => a.some(x => x.demo)); // кнопка «Убрать демо» только если есть демо
+  Store.save();
+}
+
+/* ═══ РАЗДЕЛЫ, ПОИСК, ОБЗОР, ЗАДАЧИ ═══ */
+let VIEW = 'projects', Q = '', PV = 'list', PF = 'all', TF = 'open', LASTID = null, TAB = 'over', BOOTED = false; // текущий раздел, поиск, вид проектов, фильтры
+const hit = t => !Q || String(t).toLowerCase().includes(Q);       // подходит ли текст под поиск
+const matchIdea = i => hit([i.title, i.desc, i.cat, ...i.notes.map(n => n.t)].join(' ')); // подходит ли проект под поиск
+const pctOf = i => i.tasks.length ? Math.round((i.tasks.length - i.pending) / i.tasks.length * 100) : 0; // % выполненных заметок
+const toView = (t, v) => { const b = h('button', 'b', t); b.type = 'button'; b.onclick = () => setView(v); return b; }; // кнопка «Все … →»
+function renderActive() {                                         // обзор: активные проекты
+  const e = $('oa'); e.textContent = ''; const hd = head('Активные проекты'); hd.appendChild(toView('Все →', 'projects')); e.appendChild(hd);
+  const list = S.ideas.filter(i => i.st === 'work');
+  if (!list.length) e.appendChild(h('p', 'empty', 'Нет проектов в работе. Откройте идею и нажмите «Начать работу».'));
+  list.slice(0, 5).forEach(i => {
+    const r = h('button', 'ar'), b = h('div', 'bar mini'), f = h('i'); r.type = 'button'; f.style.width = pctOf(i) + '%'; b.appendChild(f);
+    r.appendChild(h('span', 't', i.title || 'Без названия')); r.appendChild(b); r.appendChild(small(pctOf(i) + '%'));
+    r.onclick = () => openIdea(i.id); e.appendChild(r);
+  });
+}
+function renderNearest() {                                        // обзор: ближайшие задачи (заметки, ждущие работы)
+  const e = $('ot'); e.textContent = ''; const hd = head('Ближайшие задачи'); hd.appendChild(toView('Все →', 'tasks')); e.appendChild(hd);
+  const todo = []; S.ideas.filter(i => i.st === 'work').forEach(i => i.tasks.forEach(n => { if (n.status !== 'done') todo.push({ i, n }); }));
+  if (!todo.length) e.appendChild(h('p', 'empty', 'Задач нет. Добавьте заметки в проект «В работе».'));
+  todo.slice(0, 5).forEach(t => {
+    const r = row(), k = h('input'), tx = h('div', 't', t.n.t); k.type = 'checkbox'; k.setAttribute('aria-label', 'Выполнено');
+    k.onchange = () => { t.n.status = 'done'; draw(); }; tx.appendChild(small(t.i.title)); r.appendChild(k); r.appendChild(tx); e.appendChild(r);
+  });
+}
+function renderActivity() {                                       // обзор: последняя активность (из журнала)
+  const e = $('ol'); if (!e) return; e.textContent = ''; const hd = head('Последняя активность'); hd.appendChild(toView('Все события →', 'log')); e.appendChild(hd);
+  if (!Log.items.length) e.appendChild(h('p', 'empty', 'Событий пока нет.'));
+  Log.items.slice(0, 4).forEach(x => { const r = row(); r.appendChild(chip(x.t, x.lvl === 'error' ? 'err' : x.lvl === 'ok' ? 'done' : 'x')); r.appendChild(h('div', 't', x.text)); e.appendChild(r); });
+}
+function renderTasks() {                                          // раздел «Задачи»: заметки всех проектов
+  const e = $('tk'); e.textContent = ''; const hd = head('Задачи', small('заметки всех проектов')), seg = h('div', 'seg hact');
+  [['open', 'Ожидают'], ['done', 'Выполнены'], ['all', 'Все']].forEach(a => { const b = h('button', TF === a[0] ? 'on' : '', a[1]); b.type = 'button'; b.onclick = () => { TF = a[0]; renderTasks(); }; seg.appendChild(b); });
+  hd.appendChild(seg); e.appendChild(hd); let shown = 0;
+  S.ideas.forEach(i => {
+    const ts = i.tasks.filter(n => (TF === 'all' || (TF === 'open') === (n.status !== 'done')) && hit(n.t + ' ' + i.title)); if (!ts.length) return; shown += ts.length;
+    const gh = h('div', 'gh'), op = h('button', 'b', 'Открыть проект'); op.type = 'button'; op.onclick = () => openIdea(i.id);
+    gh.appendChild(h('b', null, i.title || 'Без названия')); gh.appendChild(chip(i.stage.name, i.st)); gh.appendChild(op); e.appendChild(gh);
+    ts.forEach(n => {
+      const r = row(n.status === 'done' ? 'done' : ''), k = h('input'), t = h('div', 't', n.t); k.type = 'checkbox'; k.checked = n.status === 'done'; k.setAttribute('aria-label', 'Выполнено');
+      k.onchange = () => { n.status = k.checked ? 'done' : 'todo'; draw(); }; t.appendChild(small(n.d + ' · ' + NOTE_STATUS[n.status])); r.appendChild(k); r.appendChild(t); e.appendChild(r);
+    });
+  });
+  if (!shown) e.appendChild(h('p', 'empty', 'Задач нет. Заметки добавляются внутри проекта, вкладка «Заметки».'));
+}
+let QI = 0;                                                       // номер заметки, показанной в очереди (оранжевая карточка)
+function renderToday() {                                          // оранжевая карточка «Сегодня» — считается по «Идеям и проектам»
+  const e = $('hot'), hr = new Date().getHours(); e.textContent = '';
+  e.appendChild(h('p', 'gr', hr < 5 ? 'Доброй ночи' : hr < 12 ? 'Доброе утро' : hr < 18 ? 'Добрый день' : 'Добрый вечер'));
+  const d = new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
+  e.appendChild(h('p', 'date', d[0].toUpperCase() + d.slice(1)));
+  const work = S.ideas.filter(i => i.st === 'work'), todo = [];    // проекты «В работе» и их заметки, ждущие работы
+  work.forEach(i => i.tasks.forEach(n => { if (n.status !== 'done') todo.push({ i, n }); }));
+  const nums = h('div', 'nums');
+  [[work.length, 'проектов в работе'], [todo.length, 'заметок ждут работы'], [S.ideas.filter(i => i.st === 'done').length, 'готово к публикации']].forEach(a => {
+    const b = h('div'); b.appendChild(h('b', null, a[0])); b.appendChild(h('span', null, a[1])); nums.appendChild(b);
+  });
+  e.appendChild(nums);
+  const q = h('div', 'queue');                                    // компактная очередь: одна заметка и стрелки
+  if (!todo.length) q.appendChild(h('span', null, 'Очередь пуста: добавьте заметку в проект «В работе»'));
+  else {
+    QI = (QI + todo.length) % todo.length; const cur = todo[QI];
+    const prev = h('button', 'qb', '‹'), next = h('button', 'qb', '›'), body = h('button', 'lnk', cur.i.title + ': ' + cur.n.t);
+    [prev, next, body].forEach(b => { b.type = 'button'; });
+    prev.setAttribute('aria-label', 'Предыдущая'); next.setAttribute('aria-label', 'Следующая'); body.title = cur.n.t;
+    prev.onclick = () => { QI--; renderToday(); }; next.onclick = () => { QI++; renderToday(); }; body.onclick = () => openIdea(cur.i.id);
+    q.appendChild(prev); q.appendChild(body); q.appendChild(h('small', null, (QI + 1) + '/' + todo.length)); q.appendChild(next);
+  }
+  e.appendChild(h('p', null, 'Сейчас по очереди')); e.appendChild(q);
+}
+
+function renderChannels() {                                       // карточка «Каналы и публикации»
+  const e = $('ch'); e.textContent = ''; e.appendChild(head('Каналы и публикации'));
+  const w = h('div', 'cmds');                                     // ссылки на площадки
+  [['Telegram', cfg().tg], ['ВКонтакте', cfg().vk]].forEach(a => { const l = link(a[0] + ' ↗', a[1]); l.className = 'b'; w.appendChild(l); });
+  e.appendChild(w); e.appendChild(h('p', 'note', 'Готово к публикации'));
+  const ready = S.ideas.filter(i => i.st === 'done');             // проекты со статусом «Готово»
+  if (!ready.length) e.appendChild(h('p', 'empty', 'Пока нет. Завершите проект на доске — он появится здесь.'));
+  ready.forEach(i => {
+    const r = row(), t = h('div', 't', i.title); t.appendChild(small(i.text ? 'пост написан' : 'пост ещё не написан')); r.appendChild(t);
+    const b = h('button', 'b', 'Открыть'); b.type = 'button'; b.onclick = () => openIdea(i.id); r.appendChild(b); e.appendChild(r);
+  });
+  const pub = S.ideas.filter(i => Object.keys(i.published).length); // то, что уже опубликовано
+  const n2 = h('p', 'note', 'Опубликовано'); n2.style.marginTop = '14px'; e.appendChild(n2);
+  if (!pub.length) e.appendChild(h('p', 'empty', 'Публикаций пока не было.'));
+  pub.slice(0, 5).forEach(i => { const r = row(); r.appendChild(h('div', 't', i.title)); Object.keys(i.published).forEach(k => r.appendChild(chip(DEST[k] + ' · ' + i.published[k], 'pub'))); e.appendChild(r); });
+}
+function delBtn(fn) { const x = h('button', 'x', '×'); x.type = 'button'; x.setAttribute('aria-label', 'Удалить'); x.onclick = fn; return x; } // кнопка ×
+
+function renderProjects() {                                       // карточка «Проекты» (ваши сайты)
+  const e = $('pr'); e.textContent = '';
+  const add = h('button', 'b', '+ Сайт'); add.type = 'button'; add.onclick = () => openAdd({ type: 'proj' });
+  const hd = head('Мои сайты', small(S.proj.length + ' шт.')); hd.appendChild(add); e.appendChild(hd);
+  if (!S.proj.length) e.appendChild(h('p', 'empty', 'Сайтов нет. Нажмите «+ Сайт».'));
+  S.proj.filter(p => hit(p.n + ' ' + (p.d || ''))).forEach(p => {
+    const r = row(), t = h('div', 't'); t.appendChild(p.u ? link(p.n, p.u) : h('span', null, p.n));
+    if (p.d) t.appendChild(small(p.d)); r.appendChild(t);
+    r.appendChild(chip(PROJ_STATUS[p.st] || p.st, p.st));         // текущий статус
+    const ed = h('button', 'x', '✎'); ed.type = 'button'; ed.setAttribute('aria-label', 'Изменить');
+    ed.onclick = () => openAdd({ type: 'proj', vals: p, edit: true,                        // изменить / удалить проект
+      onSave: v => Object.assign(p, v), onDelete: () => { S.proj = S.proj.filter(x => x !== p); } });
+    r.appendChild(ed); e.appendChild(r);
+  });
+}
+
+function renderInbox() {                                         // карточка «Мысли»: быстрые черновики идей
+  const e = $('ib'); e.textContent = '';
+  const add = h('button', 'b', '+ Мысль'); add.type = 'button'; add.onclick = () => openAdd({ type: 'thought' });
+  const hd = head('Мысли', small('черновики идей')); hd.appendChild(add); e.appendChild(hd);
+  if (!S.items.length) e.appendChild(h('p', 'empty', 'Записывайте сюда всё, что пришло в голову. Потом мысль можно перенести на доску.'));
+  S.items.filter(i => hit(i.t)).forEach(i => {
+    const r = row(), t = h('div', 't', i.t); if (i.due) t.appendChild(small(i.due)); r.appendChild(t);
+    if (i.demo) r.appendChild(chip('демо', 'x'));
+    const b = h('button', 'b', 'На доску'); b.type = 'button';    // мысль → идея на доске
+    b.onclick = () => { S.ideas.unshift(new Idea({ title: i.t })); S.items = S.items.filter(x => x !== i); msg('Мысль перенесена на доску'); draw(); };
+    r.appendChild(b); r.appendChild(delBtn(() => { S.items = S.items.filter(x => x !== i); draw(); })); e.appendChild(r);
+  });
+}
+
+function collectAll() {                                           // Gemini: общая сводка по заметкам всех проектов
+  if (!S.ideas.some(i => i.tasks.length)) return msg('Пока нет ни одной заметки для сводки');
+  msg('Gemini собирает заметки по всем проектам…');
+  Api.call('pultGenerateText', 'summary_all', { projects: S.ideas.map(i => i.forAI()) }).then(t => {
+    S.globalSummary = t; Store.save();
+    openModal(`<h3>Общая сводка по проектам</h3><p class="note">Проверьте факты и следующие шаги перед использованием.</p>
+      <textarea id="all-res" class="big">${esc(t)}</textarea><p class="note" id="mm"></p>
+      <div class="acts"><button class="b" id="all-cp" type="button">Скопировать</button><button class="p" id="all-ok" type="button">Готово</button></div>`);
+    on('all-cp', () => copyText($('all-res').value)); on('all-ok', closeModal);
+  }).catch(e => msg('Gemini: ' + e.message));
+}
+
+
+</script>

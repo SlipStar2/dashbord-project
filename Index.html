@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<script>
+/* СТРАЖ ЗАПУСКА: если страница не запускается, причина показывается на экране, а не прячется за надписью «загрузка…» */
+(function () {
+  var g = window.__guard = { complete: false, banner: function (title, text) {
+    var d = document.getElementById('guard') || document.createElement('div'); d.id = 'guard';
+    d.style.cssText = 'position:fixed;left:12px;right:12px;top:12px;z-index:99;background:#2a1212;color:#ffd9d4;border:1px solid #ff5a5a;border-radius:12px;padding:12px 16px;font:14px/1.5 system-ui,sans-serif';
+    d.innerHTML = '<b>' + title + '</b><br>' + text; (document.body || document.documentElement).appendChild(d); } };
+  var tip = 'Чаще всего файл Index.html вставлен в Apps Script не полностью. Проверьте, что он заканчивается строкой &lt;/html&gt;, вставьте файл заново и создайте НОВУЮ версию развёртывания.';
+  window.addEventListener('error', function (e) { if (!g.complete) g.banner('Страница не запустилась', 'Ошибка: ' + (e.message || 'неизвестная') + (e.lineno ? ' (строка ' + e.lineno + ')' : '') + '. ' + tip); });
+  setTimeout(function () { if (!g.complete) g.banner('Скрипт страницы не запустился за 5 секунд', tip); }, 5000);
+})();
+</script>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Пульт</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geologica:wght@600;700&family=Golos+Text:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0B0D10;--card:#14171C;--ink:#ECEEF2;--mut:#9AA3B2;--line:#262B34;--acc:#FF6B3D;--on-acc:#0E1116;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:dark}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.45 "Golos Text",system-ui,-apple-system,"Segoe UI",sans-serif}
+a{color:inherit}:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+.w{max-width:1180px;margin:0 auto;padding:24px 20px 56px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px}
+h1{font:700 30px/1 Geologica,system-ui,sans-serif;margin:0;letter-spacing:-.01em}
+.meta{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.cmd{display:flex;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:6px}
+.cmd:focus-within{border-color:var(--ink)}
+.cmd input{flex:1;min-width:0;border:0;background:transparent;color:var(--ink);font:400 16px "Golos Text",sans-serif;padding:10px 12px}
+.cmd input:focus-visible{outline:none}
+.p{border:0;background:var(--ink);color:var(--bg);font:600 14px "Golos Text",sans-serif;padding:0 18px;border-radius:9px;cursor:pointer}
+.toast{min-height:22px;margin:8px 4px 12px;color:var(--mut);font-size:14px}
+.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}
+.c{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px 20px;min-width:0}
+.s5{grid-column:span 5}.s7{grid-column:span 7}
+.c h2{font:600 15px Geologica,sans-serif;margin:0 0 8px;display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.c h2 small{color:var(--mut);font:400 13px "Golos Text",sans-serif}
+.hot{background:var(--acc);border-color:var(--acc);color:var(--on-acc)}
+.hot p{margin:0}.gr{font-weight:600}
+.date{font:700 clamp(30px,4.4vw,46px)/1.05 Geologica,sans-serif;margin:4px 0 0!important}
+.nums{display:flex;gap:26px;flex-wrap:wrap;margin:22px 0 14px}
+.nums b{display:block;font:700 46px/1 Geologica,sans-serif;font-variant-numeric:tabular-nums}.nums span{font-size:13px}
+.row{display:flex;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.row .t{flex:1;min-width:0;overflow-wrap:anywhere}
+.row .t small{display:block;color:var(--mut)}
+.done .t{text-decoration:line-through;color:var(--mut)}
+.chip{--c:var(--mut);font:600 12px "Golos Text",sans-serif;padding:3px 10px;border-radius:999px;border:0;white-space:nowrap;
+ background:color-mix(in srgb,var(--c) 16%,transparent);color:color-mix(in srgb,var(--c) 62%,var(--ink))}
+button.chip{cursor:pointer}
+.chip.demo{background:transparent;border:1px dashed var(--mut);color:var(--mut);font-weight:400}
+[data-s=work]{--c:#FF4D1C}[data-s=pause]{--c:#E5A800}[data-s=done],[data-s=ready]{--c:#12A150}[data-s=pub]{--c:#2F6BFF}
+.b{font:600 13px "Golos Text",sans-serif;padding:6px 11px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--ink);cursor:pointer;white-space:nowrap}
+.b:hover{background:var(--bg)}
+.x{border:0;background:transparent;color:var(--mut);font-size:20px;line-height:1;cursor:pointer;padding:2px 6px;border-radius:6px}.x:hover{color:var(--ink)}
+input[type=checkbox]{width:19px;height:19px;accent-color:var(--acc);margin:0;flex:none}
+.empty{color:var(--mut);margin:6px 0 0}
+.tot{font:700 36px/1 Geologica,sans-serif;font-variant-numeric:tabular-nums;margin:2px 0 10px}
+.cat{display:grid;grid-template-columns:150px 1fr 90px;gap:10px;align-items:center;padding:5px 0}
+.cat span:last-child{text-align:right;font-variant-numeric:tabular-nums}
+.bar{height:9px;border-radius:5px;background:var(--line)}.bar i{display:block;height:100%;border-radius:5px;background:var(--acc)}
+.cmds{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 12px}
+.note{color:var(--mut);margin:0}
+.meta .p{padding:9px 16px}
+.ov{position:fixed;inset:0;background:rgba(10,12,16,.6);display:flex;align-items:flex-start;justify-content:center;padding:max(16px,env(safe-area-inset-top)) 12px max(16px,env(safe-area-inset-bottom));overflow:auto;z-index:20}
+.ov[hidden]{display:none}
+.md{background:var(--card);border:1px solid var(--line);border-radius:20px;width:100%;max-width:660px;padding:22px;margin:auto 0}
+.md h3{font:700 24px/1.15 Geologica,sans-serif;margin:0 0 6px}
+.fld{display:block;margin:0 0 12px}.fld>span{display:block;font-size:13px;color:var(--mut);margin-bottom:4px}
+.fld input[type=text],.fld textarea{width:100%;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font:400 16px "Golos Text",sans-serif;padding:10px 12px}
+.fld textarea{min-height:84px;resize:vertical}
+.fld .cmd{margin-bottom:6px}.fld .cmd input{background:transparent!important;border:0!important}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.opts{display:flex;flex-wrap:wrap;gap:8px}
+.opt{position:relative}.opt input{position:absolute;opacity:0}
+.opt span{display:inline-block;padding:6px 13px;border:1px solid var(--line);border-radius:999px;cursor:pointer;font-weight:600;font-size:14px;color:var(--ink);margin:0}
+.opt input:checked+span{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.opt input:focus-visible+span{outline:3px solid var(--acc)}
+.tg{display:flex;gap:10px;align-items:flex-start;padding:12px;border:1px solid var(--line);border-radius:12px;margin:0 0 14px;cursor:pointer}
+.tg input{margin-top:3px}.tg small{color:var(--mut)}
+.acts{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:14px}
+.acts .p{padding:10px 18px}
+.b.ai{background:var(--acc);border-color:var(--acc);color:var(--on-acc)}.b.ai:hover{filter:brightness(.95);background:var(--acc)}
+.kb{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.kc{background:var(--bg);border-radius:14px;padding:10px;min-height:80px}
+.kc h4{margin:0 0 8px;font:600 13px Geologica,sans-serif;color:var(--mut);display:flex;justify-content:space-between}
+.card{display:block;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px;cursor:pointer;color:var(--ink);font:inherit}
+.card:hover{border-color:var(--ink)}.card b{display:block;margin:6px 0 2px}.card small{color:var(--mut)}
+.nt{padding:7px 0;border-top:1px solid var(--line)}.nt small{color:var(--mut)}
+.ph{display:flex;gap:8px;flex-wrap:wrap}.ph>div{position:relative}
+.ph img{width:88px;height:88px;object-fit:cover;border-radius:10px;display:block}
+.ph .x{position:absolute;top:3px;right:3px;background:rgba(0,0,0,.65);color:#fff;border-radius:50%;width:22px;height:22px;padding:0;font-size:15px}
+@media (max-width:900px){.kb,.two{grid-template-columns:1fr}.s5,.s7{grid-column:1/-1}.w{padding:16px 14px 40px}.cat{grid-template-columns:100px 1fr 80px}}
+
+/* ── добавлено в новой версии ── */
+.fld select,.fld input[type=number],.two>input{width:100%;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font:400 16px "Golos Text",sans-serif;padding:10px 12px}
+.ned{flex:1;width:100%;border:1px solid var(--ink);border-radius:8px;background:var(--bg);color:var(--ink);font:400 16px "Golos Text",sans-serif;padding:6px 10px}
+.steps{display:flex;gap:6px;margin:10px 0 14px}
+.steps span{flex:1;text-align:center;padding:7px 4px;border-radius:9px;background:var(--bg);color:var(--mut);font:600 13px "Golos Text",sans-serif;border:1px solid var(--line)}
+.steps .past{color:var(--ink)}.steps .on{background:var(--acc);color:var(--on-acc);border-color:var(--acc)}
+.sec{border-top:1px solid var(--line);padding-top:14px;margin-top:16px}.sec>h4{font:600 15px Geologica,sans-serif;margin:0 0 8px}
+.prog{display:flex;align-items:center;gap:10px;margin:4px 0 10px;color:var(--mut)}.prog .bar{flex:1}
+.final{background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:14px}
+.badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.big{width:100%;min-height:50vh;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:12px;font:400 15px "Golos Text",sans-serif}
+.cat span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}a.b{text-decoration:none;display:inline-block}.lnk{display:block;margin-top:6px;background:none;border:0;padding:0;color:inherit;font:inherit;text-align:left;text-decoration:underline;cursor:pointer}.pick{position:relative;cursor:pointer;display:block}.pick input{position:absolute;top:6px;left:6px;z-index:1}.pick input:not(:checked)+img{opacity:.35}[data-s=err]{--c:#FF5A5A}
+.w{padding-bottom:100px!important}
+.fab{position:fixed;left:50%;transform:translateX(-50%);bottom:max(18px,env(safe-area-inset-bottom));z-index:15;background:#4CC38A;color:#0B1A12;border:0;border-radius:999px;padding:14px 28px;font:700 16px Geologica,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.35);cursor:pointer}.fab:hover{background:#5FD39A}
+#alerts{position:fixed;right:16px;bottom:max(16px,env(safe-area-inset-bottom));z-index:30;display:flex;flex-direction:column;gap:10px;width:min(380px,calc(100vw - 32px))}
+.alert{position:relative;background:var(--card);border:1px solid #FF5A5A;border-left-width:5px;border-radius:12px;padding:12px 38px 12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.4)}.alert b{display:block;margin-bottom:4px}.alert p{margin:0 0 6px;color:var(--mut);font-size:13px;overflow-wrap:anywhere}.alert .fix{color:var(--ink);font-size:14px}.alert .x{position:absolute;top:6px;right:6px}
+#logl{max-height:260px;overflow:auto}
+.queue{display:flex;align-items:center;gap:8px;margin-top:6px;background:rgba(0,0,0,.14);border-radius:12px;padding:6px 8px}.queue .lnk{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-decoration:none;margin:0}
+.qb{border:0;background:rgba(0,0,0,.2);color:inherit;width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer;flex:none}
+.code{border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin:8px 0;background:var(--bg)}.code summary{cursor:pointer;font-weight:600}
+.code pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:260px;overflow:auto;margin:8px 0 0;font:13px/1.4 ui-monospace,Consolas,monospace}
+.code input,.code textarea{width:100%;margin-top:8px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);padding:8px 10px;font:400 15px "Golos Text",sans-serif}.code textarea{min-height:120px;font:13px ui-monospace,Consolas,monospace}
+.addcode summary{display:inline-block;list-style:none;padding:6px 11px;border:1px solid var(--line);border-radius:8px;font-size:13px}
+@media (max-width:700px){#alerts{bottom:84px}}
+/* ══ ПУЛЬТ 2.0: тема и каркас ══ */
+:root{--bg:#0A0C10;--card:#11141A;--line:#222732;--ink:#EEF0F4;--mut:#8D96A6;--acc:#FF6A2B;--on-acc:#160B04;--side:#0D1015}
+body{background:var(--bg)}
+.app{display:grid;grid-template-columns:232px 1fr;min-height:100vh}
+.side{position:sticky;top:0;height:100vh;background:var(--side);border-right:1px solid var(--line);padding:18px 14px;display:flex;flex-direction:column;gap:20px}
+.brand{display:flex;align-items:center;gap:10px;font:700 19px Geologica,sans-serif}.brand i{color:var(--acc);font-style:normal}
+.logo{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,#FF8A4C,#FF5A1F);color:#fff;display:grid;place-items:center;font:700 21px Geologica,sans-serif}
+nav{display:flex;flex-direction:column;gap:4px}
+nav button{display:flex;align-items:center;gap:12px;background:none;border:0;color:var(--mut);font:600 15px "Golos Text",sans-serif;padding:10px 12px;border-radius:10px;cursor:pointer;text-align:left}
+nav button:hover{background:var(--card);color:var(--ink)}
+nav button.on{background:linear-gradient(90deg,rgba(255,106,43,.30),rgba(255,106,43,.06));color:#fff;box-shadow:inset 3px 0 0 var(--acc)}
+nav .ic{width:20px;text-align:center;font-size:17px}
+nav button[data-n]::after{content:attr(data-n);margin-left:auto;background:#FF5A5A;color:#fff;border-radius:999px;font-size:11px;padding:1px 7px}
+.main{min-width:0;padding:18px 24px 48px}
+.bar2{display:flex;gap:10px;align-items:center;margin-bottom:12px}
+.bar2 input{flex:1;min-width:0;background:var(--card);border:1px solid var(--line);color:var(--ink);border-radius:12px;padding:11px 14px;font:400 15px "Golos Text",sans-serif}
+.add{background:#4CC38A;color:#0B1A12;border:0;border-radius:10px;padding:10px 18px;font:700 14px Geologica,sans-serif;cursor:pointer;white-space:nowrap}.add:hover{background:#5FD39A}
+.view[hidden]{display:none}
+.ovgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.ovgrid .wide{grid-column:1/-1}
+.today{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:6px 0 14px}.big{display:block;font:700 52px/1 Geologica,sans-serif}
+.ring{width:96px;height:96px;border-radius:50%;background:conic-gradient(var(--acc) calc(var(--p)*1%),var(--line) 0);display:grid;place-items:center;position:relative;flex:none}
+.ring::after{content:"";position:absolute;inset:10px;border-radius:50%;background:var(--card)}.ring span{position:relative;z-index:1;font:700 22px Geologica,sans-serif}
+.ar{display:flex;align-items:center;gap:10px;width:100%;padding:10px 0;background:none;border:0;border-top:1px solid var(--line);color:inherit;font:inherit;text-align:left;cursor:pointer}
+.ar .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bar.mini{width:96px;flex:none}
+.hact{margin-left:auto;display:flex;gap:8px;align-items:center}
+.seg{display:flex;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:3px}.seg button{border:0;background:none;color:var(--mut);font:600 13px "Golos Text",sans-serif;padding:5px 12px;border-radius:7px;cursor:pointer}.seg .on{background:var(--acc);color:var(--on-acc)}
+.b.on{background:var(--ink);color:var(--bg)}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.pc{display:flex;text-align:left;background:var(--bg);border:1px solid var(--line);border-radius:14px;overflow:hidden;cursor:pointer;color:var(--ink);font:inherit;padding:0}.pc:hover{border-color:var(--acc)}
+.cov{width:108px;flex:none;background:linear-gradient(135deg,#2B190F,#14171C) center/cover;display:grid;place-items:center;font:700 34px Geologica,sans-serif;color:var(--acc)}
+.pcb{padding:12px 14px;min-width:0;flex:1}.pct{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}.pct b{overflow-wrap:anywhere}
+.pcd{margin:4px 0 8px;color:var(--mut);font-size:13px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.prog2{display:flex;align-items:center;gap:8px;margin-bottom:6px}.prog2 .bar{flex:1}.prog2 span{font-size:12px;color:var(--mut)}
+.gh{display:flex;align-items:center;gap:10px;margin:16px 0 4px}
+.tabs{display:flex;gap:6px;margin:0 0 14px;overflow:auto}.tabs button{border:1px solid var(--line);background:none;color:var(--mut);font:600 13px "Golos Text",sans-serif;padding:7px 14px;border-radius:9px;cursor:pointer;white-space:nowrap}.tabs .on{background:var(--acc);border-color:var(--acc);color:var(--on-acc)}
+.md{max-width:780px}#logl{max-height:none}
+@media (max-width:900px){
+ .ovgrid{grid-template-columns:1fr}.app{grid-template-columns:1fr}
+ .side{position:fixed;left:0;right:0;bottom:0;top:auto;height:auto;flex-direction:row;padding:6px 6px max(6px,env(safe-area-inset-bottom));z-index:15;border-right:0;border-top:1px solid var(--line)}
+ .brand{display:none}nav{flex-direction:row;width:100%;justify-content:space-between;gap:0}nav button{flex:1;justify-content:center;padding:10px 2px}nav .lb{display:none}
+ .main{padding:12px 12px 92px}.bar2{flex-wrap:wrap}
+}
+/* ══ Пульт 2.0, часть 2: ближе к макетам ══ */
+body{background:radial-gradient(800px 480px at 100% -5%,rgba(255,106,43,.12),transparent 60%),radial-gradient(700px 500px at -5% 105%,rgba(255,106,43,.08),transparent 60%),var(--bg);background-attachment:fixed}
+.side{display:flex;flex-direction:column}nav{flex:1}nav .bottom{margin-top:auto}
+.ph{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.pt{font:800 26px/1.1 Geologica,sans-serif;text-transform:uppercase;letter-spacing:.02em;margin:0;display:block}.ps{margin:4px 0 0;color:var(--mut)}
+.solo>h2:first-child{font:800 22px/1.1 Geologica,sans-serif;text-transform:uppercase;letter-spacing:.02em;margin-bottom:14px}
+.btn-or{background:var(--acc);color:var(--on-acc);border:0;border-radius:10px;padding:10px 16px;font:700 14px Geologica,sans-serif;cursor:pointer;white-space:nowrap}
+.icon{position:relative;width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;display:grid;place-items:center;font-size:16px;flex:none}
+.icon[data-n]::after{content:"";position:absolute;top:8px;right:9px;width:8px;height:8px;border-radius:50%;background:#FF5A5A}
+.ava{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#FF8A4C,var(--acc));color:#160B04;display:grid;place-items:center;font:700 15px Geologica,sans-serif;flex:none}
+.sync::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--c);margin-right:7px}
+.split{display:grid;grid-template-columns:340px 1fr;gap:16px;align-items:start}.split[hidden]{display:none}
+#pl{position:sticky;top:12px;max-height:calc(100vh - 100px);overflow:auto}
+.li{display:flex;gap:12px;width:100%;text-align:left;background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:10px;margin-bottom:8px;color:var(--ink);font:inherit;cursor:pointer}
+.li:hover{border-color:#3a4252}.li.on{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc) inset}
+.th{width:56px;height:56px;flex:none;border-radius:12px;background:linear-gradient(135deg,#2B190F,#14171C) center/cover;display:grid;place-items:center;font:700 22px Geologica,sans-serif;color:var(--acc)}
+.lib{min-width:0;flex:1}.lit{display:flex;justify-content:space-between;gap:6px;align-items:flex-start}.lit b{overflow-wrap:anywhere}.sep{margin:12px 2px 8px}
+.whead{display:flex;gap:16px;align-items:center;margin-bottom:12px}.whead h3{margin:0 0 8px}
+.wcov{width:104px;height:104px;border-radius:16px;flex:none;background:linear-gradient(135deg,#2B190F,#14171C) center/cover;display:grid;place-items:center;font:700 40px Geologica,sans-serif;color:var(--acc)}
+.wmeta{flex:1;min-width:0}.covtools{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.covtools input[type=text]{flex:1;min-width:180px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font:400 15px "Golos Text",sans-serif;padding:8px 12px}
+.filebtn{cursor:pointer;display:inline-block}.inl{max-width:none;border:0;padding:0;background:none;margin:0}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:16px}
+.kpi small{display:block;color:var(--mut)}.kpi b{display:block;font:700 30px/1.1 Geologica,sans-serif;margin:6px 0 4px;font-variant-numeric:tabular-nums}
+.agrid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.agrid .wide{grid-column:1/-1}.agrid .span2{grid-column:span 2}
+.dwrap{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.donut{width:132px;height:132px;border-radius:50%;position:relative;display:grid;place-items:center;flex:none;text-align:center}
+.donut::after{content:"";position:absolute;inset:17px;border-radius:50%;background:var(--card)}
+.donut span{position:relative;z-index:1;font:700 17px/1.15 Geologica,sans-serif;display:block;max-width:90px}.donut small{display:block;font:400 11px "Golos Text",sans-serif;color:var(--mut)}
+.leg{flex:1;min-width:120px}.leg div{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px}.leg i{width:10px;height:10px;border-radius:3px;flex:none}.leg b{margin-left:auto;font-weight:600}
+.bars{display:flex;gap:10px;height:180px}.bcol{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0}.bw{flex:1;width:100%;display:flex;align-items:flex-end}
+.bb{width:100%;background:#2D3442;border-radius:6px 6px 0 0}.bb.now{background:var(--acc)}.bcol small{font-size:11px;color:var(--mut);white-space:nowrap}
+.tbl{overflow-x:auto}.tr{display:grid;grid-template-columns:var(--cols);gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line);min-width:560px}.tr.thd{border-top:0;color:var(--mut);font-size:12px}
+.tr .lk{background:none;border:0;color:var(--ink);font:inherit;text-align:left;cursor:pointer;padding:0;text-decoration:underline;text-decoration-color:var(--line)}.over{color:#FF8A6B}
+.tip{display:block;width:100%;padding:9px 0;border:0;border-top:1px solid var(--line);background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.sw{width:30px;height:30px;border-radius:50%;border:2px solid transparent;cursor:pointer}.sw.on{border-color:#fff}
+@media (max-width:900px){.split{grid-template-columns:1fr}#pl{position:static;max-height:none}.kpis{grid-template-columns:repeat(2,1fr)}.agrid{grid-template-columns:1fr}.agrid .span2{grid-column:auto}.whead{flex-direction:column;align-items:flex-start}}
+.md p{margin:8px 0}.row .t small{margin-bottom:2px}.c h2 .b{margin-left:auto}
+
+</style>
+</head>
+<body>
+<div class="app">
+ <aside class="side">
+  <div class="brand"><span class="logo">П</span><span><span id="brand">ПУЛЬТ</span> <i id="ver">2.0</i></span></div>
+  <nav id="nav" aria-label="Разделы"></nav>
+ </aside>
+ <div class="main">
+  <header class="bar2">
+   <input id="q" type="search" autocomplete="off" aria-label="Поиск" placeholder="Поиск по проектам, задачам и заметкам…">
+   <span class="chip sync" id="sync" data-s="pause">загрузка…</span>
+   <button class="icon" id="bell" type="button" aria-label="Журнал событий" title="Журнал событий"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 17h12l-1.5-2V10a4.5 4.5 0 0 0-9 0v5zM10 20h4"/></svg></button>
+   <button class="icon" id="refresh" type="button" title="Обновить данные" aria-label="Обновить данные">↻</button>
+   <button class="b" id="clr" type="button" hidden>Убрать демо</button>
+   <button class="add" id="new" type="button">+ Добавить</button>
+   <span class="ava" id="ava">Д</span>
+  </header>
+  <p class="toast" id="toast" aria-live="polite"></p>
+  <section class="view" data-v="projects"><div id="ds"></div><div class="split" id="split"><section class="c" id="pl" aria-label="Список проектов"></section><section class="c" id="pd" aria-label="Проект"></section></div></section>
+  <section class="view" data-v="overview" hidden><div class="ovgrid">
+   <section class="c hot" id="hot" aria-label="Сегодня"></section>
+   <section class="c" id="oa" aria-label="Активные проекты"></section>
+   <section class="c" id="ot" aria-label="Ближайшие задачи"></section>
+   <section class="c wide" id="ol" aria-label="Последняя активность"></section>
+  </div></section>
+  <section class="view" data-v="tasks" hidden><section class="c solo" id="tk" aria-label="Задачи"></section></section>
+  <section class="view" data-v="analytics" hidden><div id="ex"></div></section>
+  <section class="view" data-v="publish" hidden><section class="c solo" id="ch" aria-label="Публикации"></section></section>
+  <section class="view" data-v="thoughts" hidden><section class="c solo" id="ib" aria-label="Мысли"></section></section>
+  <section class="view" data-v="sites" hidden><section class="c solo" id="pr" aria-label="Мои сайты"></section></section>
+  <section class="view" data-v="log" hidden><section class="c solo" id="logp" aria-label="Журнал"><h2>Журнал событий <span><button class="b" id="logcp" type="button">Копировать</button> <button class="b" id="logclr" type="button">Очистить</button></span></h2><div id="logl"></div></section></section>
+  <section class="view" data-v="settings" hidden><div id="st"></div></section>
+ </div>
+</div>
+<div id="alerts"></div>
+<div class="ov" id="ov" hidden></div>
+<?!= include("Client1"); ?>
+<?!= include("Client2"); ?>
+</body>
+</html>

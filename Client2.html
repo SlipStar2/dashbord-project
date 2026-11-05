@@ -1,0 +1,448 @@
+<script>
+/* ═══ НАСТРОЙКИ (меняются в разделе «Настройки», хранятся в Google вместе с данными) ═══ */
+const DEF = { brand: 'ПУЛЬТ', ver: '2.0', initials: 'Д', accent: '#FF6A2B', cats: ['3D-печать', 'Arduino', 'ИИ', 'Машина', 'Сайт', 'Другое'],
+  tg: 'https://t.me/di_ero', vk: 'https://vk.ru/club240525536', start: 'projects', names: {}, hidden: {}, order: [] }; // значения по умолчанию
+const SWATCHES = ['#FF6A2B', '#4CC38A', '#4C8DFF', '#B592FF', '#FF6FA5', '#E5B400']; // варианты главного цвета
+function cfg() { if (!S.settings) S.settings = JSON.parse(JSON.stringify(DEF)); return S.settings; } // текущие настройки (создаются при первом обращении)
+function applySettings() {                                        // применить настройки к странице
+  const c = cfg(); CATS = c.cats.length ? c.cats : DEF.cats.slice();
+  document.documentElement.style.setProperty('--acc', c.accent);
+  $('brand').textContent = c.brand; $('ver').textContent = c.ver; $('ava').textContent = c.initials; document.title = c.brand + ' ' + c.ver;
+}
+
+/* ═══ ЗНАЧКИ МЕНЮ ═══ */
+const ICON = {                                                    // линейные значки 24×24
+  projects: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  overview: '<path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/>',
+  tasks: '<path d="M4 4h16v16H4zM8 12l3 3 5-6"/>',
+  analytics: '<path d="M5 20V10M12 20V4M19 20v-8"/>',
+  publish: '<path d="M21 3L10 14M21 3l-7 18-4-7-7-4z"/>',
+  thoughts: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10c1 1 1 2 1 3h6c0-1 0-2 1-3a6 6 0 0 0-4-10z"/>',
+  sites: '<path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',
+  log: '<path d="M6 3h9l4 4v14H6zM9 12h7M9 16h7"/>',
+  settings: '<path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h12M20 18h0"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>'
+};
+
+/* ═══ РАЗДЕЛЫ МЕНЮ ═══ */
+const VIEWS = [['projects', 'Проекты'], ['overview', 'Обзор'], ['tasks', 'Задачи'], ['analytics', 'Аналитика'], ['publish', 'Публикации'],
+  ['thoughts', 'Мысли'], ['sites', 'Мои сайты'], ['log', 'Журнал'], ['settings', 'Настройки']];   // [id, название по умолчанию]; «Проекты» — первые
+const viewName = id => cfg().names[id] || VIEWS.find(v => v[0] === id)[1];     // название раздела (можно переименовать в настройках)
+function orderedIds() {                                           // порядок разделов из настроек (без «Настроек»)
+  const c = cfg(), ids = VIEWS.map(v => v[0]).filter(id => id !== 'settings');
+  return ids.sort((a, b) => { const x = c.order.indexOf(a), y = c.order.indexOf(b); return (x < 0 ? 99 : x) - (y < 0 ? 99 : y); });
+}
+const viewIds = () => orderedIds().filter(id => !cfg().hidden[id]);            // видимые разделы
+function renderNav() {                                            // левое меню
+  const nav = $('nav'), errs = Log.items.filter(e => e.lvl === 'error').length; nav.textContent = '';
+  viewIds().concat(['settings']).forEach(id => {
+    const b = h('button', (id === VIEW ? 'on' : '') + (id === 'settings' ? ' bottom' : '')); b.type = 'button'; b.title = viewName(id);
+    b.innerHTML = '<span class="ic"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + ICON[id] + '</svg></span><span class="lb">' + esc(viewName(id)) + '</span>';
+    if (id === 'log' && errs) b.dataset.n = errs;                 // красный счётчик ошибок у «Журнала»
+    b.onclick = () => setView(id); nav.appendChild(b);
+  });
+  const bell = $('bell'); if (errs) bell.dataset.n = errs; else delete bell.dataset.n; // колокольчик: есть ошибки
+}
+function setView(v) {                                             // показать нужный раздел
+  if (v !== 'settings' && !viewIds().includes(v)) v = viewIds()[0] || 'settings';
+  VIEW = v; document.querySelectorAll('.view').forEach(x => { x.hidden = x.dataset.v !== v; }); renderNav(); scrollTo(0, 0);
+}
+const pageHead = (t, sub, act) => {                               // большой заголовок раздела (как на макетах)
+  const d = h('div', 'ph'), l = h('div'); l.appendChild(h('h2', 'pt', t)); if (sub) l.appendChild(h('p', 'ps', sub)); d.appendChild(l); if (act) d.appendChild(act); return d;
+};
+
+/* ═══ ПРОЕКТЫ: список слева, вся информация справа ═══ */
+let SEL = null;                                                   // выбранный проект
+const coverOf = i => i.cover || (i.photos[0] ? (typeof i.photos[0] === 'string' ? i.photos[0] : i.photos[0].url) : ''); // превью: своя картинка или первое фото
+const isFinished = i => i.st === 'done' || i.st === 'pub' || (i.tasks.length > 0 && i.pending === 0); // проект завершён → уходит вниз списка
+const bgUrl = u => 'url("' + String(u).replace(/"/g, '%22') + '")';
+function thumb(i, cls) { const t = h('div', cls || 'th'); const u = coverOf(i); if (u) t.style.backgroundImage = bgUrl(u); else t.textContent = (i.title || '?')[0].toUpperCase(); return t; }
+function openIdea(id) {                                           // открыть проект (из любого раздела)
+  SEL = id; PV = 'list'; if (VIEW !== 'projects') setView('projects');
+  $('ov').hidden = true; $('ov').textContent = ''; renderBoard();
+}
+function ideaHost(html) { const d = $('pd'); d.innerHTML = '<div class="md inl">' + html + '</div>'; return d; } // вставить карточку проекта справа
+function setCover(i, file, done) { uploadPhoto(file, i, p => { i.cover = p.url; Store.save(); done(); }); }   // загрузить картинку-превью
+function renderList(list) {                                       // левый столбик проектов
+  const e = $('pl'); e.textContent = '';
+  const fl = h('div', 'opts'); fl.style.marginBottom = '10px';
+  [['all', 'Все']].concat(STAGES.map(s => [s.id, s.name])).forEach(a => {
+    const b = h('button', 'b' + (PF === a[0] ? ' on' : ''), a[1]); b.type = 'button'; b.onclick = () => { PF = a[0]; renderBoard(); }; fl.appendChild(b);
+  });
+  e.appendChild(fl);
+  if (!list.length) e.appendChild(h('p', 'empty', 'Проектов нет. Нажмите «+ Новый проект».'));
+  let sep = false;
+  list.forEach(i => {
+    if (isFinished(i) && !sep) { sep = true; e.appendChild(h('p', 'note sep', 'Завершённые (внизу списка)')); } // 100% — уходят вниз
+    const b = h('button', 'li' + (i.id === SEL ? ' on' : '')), body = h('div', 'lib'), top = h('div', 'lit');
+    b.type = 'button'; top.appendChild(h('b', null, i.title || 'Без названия')); top.appendChild(chip(i.stage.name, i.st));
+    const pr = h('div', 'prog2'), bar = h('div', 'bar'), f = h('i'); f.style.width = pctOf(i) + '%'; bar.appendChild(f); pr.appendChild(bar); pr.appendChild(h('span', null, pctOf(i) + '%'));
+    body.appendChild(top); body.appendChild(small(i.meta())); body.appendChild(pr);
+    b.appendChild(thumb(i)); b.appendChild(body); b.onclick = () => openIdea(i.id); e.appendChild(b);
+  });
+}
+function renderBoard() {                                          // раздел «Проекты»
+  const e = $('ds'); e.textContent = '';
+  const act = h('span', 'hact'), seg = h('div', 'seg');
+  [['list', 'Список'], ['kanban', 'Канбан']].forEach(a => { const b = h('button', PV === a[0] ? 'on' : '', a[1]); b.type = 'button'; b.onclick = () => { PV = a[0]; renderBoard(); }; seg.appendChild(b); });
+  const all = h('button', 'b ai', 'Сводка заметок (Gemini)'); all.type = 'button'; all.onclick = collectAll;
+  const nw = h('button', 'btn-or', '+ Новый проект'); nw.type = 'button'; nw.onclick = () => openAdd({ type: 'idea' });
+  act.appendChild(seg); act.appendChild(all); act.appendChild(nw);
+  e.appendChild(pageHead('Проекты', 'От идеи до результата без лишних окон', act));
+  $('split').hidden = PV !== 'list';
+  const list = S.ideas.filter(matchIdea);
+  if (PV === 'kanban') {                                          // канбан: колонка на каждое состояние
+    const kb = h('div', 'kb'); STAGES.forEach(st => {
+      const col = h('div', 'kc'), L = list.filter(i => i.st === st.id), t = h('h4', null, st.name); t.appendChild(h('span', null, L.length)); col.appendChild(t);
+      L.forEach(i => { const c = h('button', 'card'); c.type = 'button'; c.appendChild(chip(i.cat, 'x')); c.appendChild(h('b', null, i.title || 'Без названия')); c.appendChild(small(i.meta())); c.onclick = () => openIdea(i.id); col.appendChild(c); });
+      if (!L.length) col.appendChild(h('p', 'empty', 'Пусто')); kb.appendChild(col);
+    });
+    const w = h('section', 'c'); w.appendChild(kb); e.appendChild(w); return;
+  }
+  const sorted = list.filter(i => PF === 'all' || i.st === PF).sort((a, b) => isFinished(a) - isFinished(b)); // незавершённые сверху
+  if (!sorted.some(i => i.id === SEL)) SEL = sorted.length ? sorted[0].id : null;                              // при открытии выбран первый проект
+  renderList(sorted); renderDetail(SEL);
+}
+
+/* ═══ АНАЛИТИКА И РАСХОДЫ ═══ */
+const isoOf = d => { const m = String(d || '').match(/^(\d{2})\.(\d{2})\.(\d{4})$/); return m ? `${m[3]}-${m[2]}-${m[1]}` : String(d || '').slice(0, 10); }; // 31.10.2026 → 2026-10-31
+const money = v => Math.round(v).toLocaleString('ru-RU') + ' ₽';
+const PAL = ['#FF6A2B', '#4C8DFF', '#4CC38A', '#E5B400', '#B592FF', '#FF5A5A'];                                // цвета диаграмм
+const MN = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+const budgetOf = i => Number((String(i.cost || '').match(/\d[\d\s]*/) || ['0'])[0].replace(/\s/g, '')) || 0;    // «~2000 руб.» → 2000
+const monthKey = (d, back) => { const x = new Date(d.getFullYear(), d.getMonth() - back, 1); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0'); };
+function allSpend() {                                             // все траты: из проектов и старые быстрые
+  const a = [];
+  S.ideas.forEach(i => i.expenses.forEach(x => a.push({ who: i.title || 'Без названия', cat: i.cat, id: i.id, amount: Number(x.amount) || 0, iso: x.iso || isoOf(x.d), label: x.label || '' })));
+  S.exp.forEach(x => a.push({ who: 'Прочее', cat: 'Прочее', id: '', amount: Number(x.a != null ? x.a : x.amount) || 0, iso: isoOf(x.d), label: x.l || x.label || '' }));
+  return a;
+}
+function box(title, sub, cls) { const c = h('section', 'c' + (cls ? ' ' + cls : '')); c.appendChild(head(title, sub ? small(sub) : null)); return c; } // карточка с заголовком
+function kpi(t, v, s) { const c = h('section', 'c kpi'); c.appendChild(small(t)); c.appendChild(h('b', null, v)); c.appendChild(small(s || '')); return c; }
+function donut(parts, big, lab) {                                 // круговая диаграмма на CSS
+  const total = parts.reduce((a, p) => a + p.value, 0) || 1; let acc = 0;
+  const stops = parts.filter(p => p.value > 0).map(p => { const a = acc / total * 100; acc += p.value; return `${p.color} ${a}% ${acc / total * 100}%`; });
+  const d = h('div', 'donut'), s = h('span', null, big); d.style.background = stops.length ? `conic-gradient(${stops.join(',')})` : 'var(--line)'; s.appendChild(h('small', null, lab || '')); d.appendChild(s); return d;
+}
+function legend(parts, fmt) { const l = h('div', 'leg'); parts.forEach(p => { const r = h('div'), i = h('i'); i.style.background = p.color; r.appendChild(i); r.appendChild(h('span', null, p.label)); r.appendChild(h('b', null, fmt(p.value))); l.appendChild(r); }); return l; }
+function trow(cols, cells, cls) { const r = h('div', 'tr' + (cls ? ' ' + cls : '')); r.style.setProperty('--cols', cols); cells.forEach(c => r.appendChild(typeof c === 'string' ? h('span', null, c) : c)); return r; } // строка таблицы
+function renderExpenses() {                                       // раздел «Аналитика»: показатели, диаграммы, таблицы
+  const e = $('ex'); e.textContent = ''; e.appendChild(pageHead('Аналитика и расходы', 'Понимайте, куда уходит время и бюджет'));
+  const sp = allSpend(), now = new Date(), cur = monthKey(now, 0), prev = monthKey(now, 1), sum = k => sp.filter(x => x.iso.slice(0, 7) === k).reduce((a, x) => a + x.amount, 0);
+  const mCur = sum(cur), mPrev = sum(prev), total = sp.reduce((a, x) => a + x.amount, 0), delta = mPrev ? Math.round((mCur - mPrev) / mPrev * 100) : null;
+  const tasks = S.ideas.reduce((a, i) => a + i.tasks.length, 0), done = S.ideas.reduce((a, i) => a + i.tasks.length - i.pending, 0);
+  const k = h('div', 'kpis');                                     // 4 главных показателя
+  k.appendChild(kpi('Проектов в работе', S.ideas.filter(i => i.st === 'work').length, 'из ' + S.ideas.length + ' всего'));
+  k.appendChild(kpi('Заметок выполнено', done, 'из ' + tasks + (tasks ? ' · ' + Math.round(done / tasks * 100) + '%' : '')));
+  k.appendChild(kpi('Расходы за месяц', money(mCur), delta == null ? 'в прошлом месяце трат не было' : (delta > 0 ? '▲ ' : '▼ ') + Math.abs(delta) + '% к прошлому месяцу'));
+  k.appendChild(kpi('Всего потрачено', money(total), S.ideas.length ? 'в среднем ' + money(total / S.ideas.length) + ' на проект' : ''));
+  e.appendChild(k);
+  const g = h('div', 'agrid');
+  const c1 = box('Статус проектов'), p1 = STAGES.map((s, n) => ({ label: s.name, value: S.ideas.filter(i => i.st === s.id).length, color: PAL[n] })), w1 = h('div', 'dwrap');
+  w1.appendChild(donut(p1, S.ideas.length, 'проектов')); w1.appendChild(legend(p1, String)); c1.appendChild(w1); g.appendChild(c1);
+  const c2 = box('Расходы по месяцам', '6 месяцев'), bars = h('div', 'bars'), keys = [5, 4, 3, 2, 1, 0].map(n => monthKey(now, n)), vals = keys.map(sum), mx = Math.max(...vals, 1);
+  keys.forEach((kk, n) => {
+    const col = h('div', 'bcol'), w = h('div', 'bw'), b = h('div', 'bb'); b.style.height = Math.max(vals[n] ? 4 : 0, vals[n] / mx * 100) + '%'; if (kk === cur) b.classList.add('now');
+    w.appendChild(b); col.appendChild(h('small', null, vals[n] ? money(vals[n]) : '')); col.appendChild(w); col.appendChild(h('small', null, MN[+kk.slice(5) - 1])); bars.appendChild(col);
+  });
+  c2.appendChild(bars); g.appendChild(c2);
+  const by = {}; sp.forEach(x => { by[x.cat] = (by[x.cat] || 0) + x.amount; });
+  const p3 = Object.keys(by).sort((a, b) => by[b] - by[a]).map((c, n) => ({ label: c, value: by[c], color: PAL[n % PAL.length] })), c3 = box('Структура расходов', 'по видам идей'), w3 = h('div', 'dwrap');
+  if (p3.length) { w3.appendChild(donut(p3, money(total), 'всего')); w3.appendChild(legend(p3, money)); c3.appendChild(w3); } else c3.appendChild(h('p', 'empty', 'Трат пока нет. Они добавляются внутри проекта, блок «Затраты».')); g.appendChild(c3);
+  const c4 = box('Сравнение проектов', null, 'wide'), tb = h('div', 'tbl'), cols = '2fr 1fr 1.4fr .8fr 1.4fr';
+  tb.appendChild(trow(cols, ['Проект', 'Состояние', 'Прогресс', 'Заметки', 'План / Факт'], 'thd'));
+  S.ideas.forEach(i => {
+    const nm = h('button', 'lk', i.title || 'Без названия'), pr = h('div', 'prog2'), bar = h('div', 'bar'), f = h('i'), bg = budgetOf(i), over = bg > 0 && i.spent > bg;
+    nm.type = 'button'; nm.onclick = () => openIdea(i.id); f.style.width = pctOf(i) + '%'; bar.appendChild(f); pr.appendChild(bar); pr.appendChild(h('span', null, pctOf(i) + '%'));
+    const pf = h('span', over ? 'over' : null, (bg ? money(bg) : '—') + ' / ' + money(i.spent));
+    tb.appendChild(trow(cols, [nm, chip(i.stage.name, i.st), pr, (i.tasks.length - i.pending) + ' / ' + i.tasks.length, pf]));
+  });
+  if (!S.ideas.length) tb.appendChild(h('p', 'empty', 'Проектов пока нет.')); c4.appendChild(tb); g.appendChild(c4);
+  const c5 = box('Журнал расходов', 'последние 10', 'span2'), tj = h('div', 'tbl'), cj = '1fr 2fr 2fr 1fr';
+  tj.appendChild(trow(cj, ['Дата', 'Проект', 'Назначение', 'Сумма'], 'thd'));
+  sp.filter(x => x.amount).sort((a, b) => b.iso.localeCompare(a.iso)).slice(0, 10).forEach(x => tj.appendChild(trow(cj, [x.iso.split('-').reverse().join('.'), x.who, x.label, money(x.amount)])));
+  if (!sp.length) tj.appendChild(h('p', 'empty', 'Журнал пуст.')); c5.appendChild(tj); g.appendChild(c5);
+  const c6 = box('Риски и подсказки'), tips = [];                 // подсказки считаются автоматически
+  S.ideas.forEach(i => {
+    const bg = budgetOf(i);
+    if (bg && i.spent > bg) tips.push([i, 'Затраты больше плана: ' + money(i.spent) + ' из ' + money(bg)]);
+    if (i.st === 'work' && !i.tasks.length) tips.push([i, 'В работе, но нет ни одной заметки: составьте план']);
+    if (i.st === 'done') tips.push([i, 'Готов: можно публиковать']);
+  });
+  tips.slice(0, 6).forEach(t => { const b = h('button', 'tip'); b.type = 'button'; b.appendChild(h('b', null, t[0].title || 'Без названия')); b.appendChild(small(t[1])); b.onclick = () => openIdea(t[0].id); c6.appendChild(b); });
+  if (!tips.length) c6.appendChild(h('p', 'empty', 'Всё в порядке: поводов для тревоги нет.')); g.appendChild(c6);
+  e.appendChild(g);
+}
+
+/* ═══ НАСТРОЙКИ: редактирование сайта ═══ */
+function renderSettings() {
+  const e = $('st'); e.textContent = ''; const c = cfg();
+  e.appendChild(pageHead('Настройки', 'Оформление, разделы меню, списки и ссылки. Изменения сохраняются сразу'));
+  const save = () => { applySettings(); renderNav(); Store.save(); };                                          // применить и сохранить
+  const field = (label, val, fn) => { const w = h('label', 'fld'), i = h('input'); i.type = 'text'; i.value = val; i.oninput = () => { fn(i.value.trim()); save(); }; w.appendChild(h('span', null, label)); w.appendChild(i); return w; };
+  const g = h('div', 'agrid');
+  const a = box('Оформление'); a.appendChild(field('Название', c.brand, v => { c.brand = v || DEF.brand; })); a.appendChild(field('Версия (можно оставить пустой)', c.ver, v => { c.ver = v; }));
+  a.appendChild(field('Инициалы в аватаре', c.initials, v => { c.initials = v.slice(0, 2) || DEF.initials; }));
+  const sw = h('div', 'opts'), sl = h('div', 'fld'); sl.appendChild(h('span', null, 'Главный цвет'));
+  SWATCHES.forEach(col => { const b = h('button', 'sw' + (c.accent === col ? ' on' : '')); b.type = 'button'; b.style.background = col; b.setAttribute('aria-label', 'Цвет ' + col); b.onclick = () => { c.accent = col; save(); renderSettings(); }; sw.appendChild(b); });
+  sl.appendChild(sw); a.appendChild(sl); g.appendChild(a);
+  const m = box('Разделы меню', 'переименуйте, скройте, переставьте', 'span2'), ord = orderedIds();
+  ord.forEach((id, n) => {
+    const r = row(), k = h('input'), nm = h('input', 'ned'), up = h('button', 'x', '↑'), dn = h('button', 'x', '↓');
+    k.type = 'checkbox'; k.checked = !c.hidden[id]; k.setAttribute('aria-label', 'Показывать'); k.onchange = () => { c.hidden[id] = !k.checked; save(); };
+    nm.type = 'text'; nm.value = viewName(id); nm.oninput = () => { c.names[id] = nm.value.trim(); save(); };
+    [up, dn].forEach(b => { b.type = 'button'; }); up.setAttribute('aria-label', 'Выше'); dn.setAttribute('aria-label', 'Ниже');
+    const mv = d => () => { const o = orderedIds(), j = n + d; if (j < 0 || j >= o.length) return; [o[n], o[j]] = [o[j], o[n]]; c.order = o; save(); renderSettings(); };
+    up.onclick = mv(-1); dn.onclick = mv(1); r.appendChild(k); r.appendChild(nm); r.appendChild(up); r.appendChild(dn); m.appendChild(r);
+  });
+  const sel = h('select'); viewIds().forEach(id => { const o = h('option', null, viewName(id)); o.value = id; if (id === c.start) o.selected = true; sel.appendChild(o); });
+  sel.onchange = () => { c.start = sel.value; save(); }; const sf = h('label', 'fld'); sf.style.marginTop = '12px'; sf.appendChild(h('span', null, 'Какой раздел открывать при запуске')); sf.appendChild(sel); m.appendChild(sf); g.appendChild(m);
+  const t = box('Виды идей'), cw = h('div', 'opts');
+  c.cats.forEach((x, n) => { const b = h('button', 'b', x + ' ×'); b.type = 'button'; b.onclick = () => { c.cats.splice(n, 1); save(); renderSettings(); }; cw.appendChild(b); });
+  const ai2 = h('input'), ab = h('button', 'b', 'Добавить'); ai2.type = 'text'; ai2.placeholder = 'Новый вид, например «Дом»'; ab.type = 'button';
+  ab.onclick = () => { const v = ai2.value.trim(); if (v && !c.cats.includes(v)) { c.cats.push(v); save(); renderSettings(); } };
+  const af = h('div', 'covtools'); af.style.marginTop = '10px'; af.appendChild(ai2); af.appendChild(ab); t.appendChild(cw); t.appendChild(af); g.appendChild(t);
+  const ch = box('Каналы'); ch.appendChild(field('Ссылка на Telegram-канал', c.tg, v => { c.tg = v; })); ch.appendChild(field('Ссылка на группу ВКонтакте', c.vk, v => { c.vk = v; }));
+  const rs = h('button', 'b', 'Сбросить настройки'); rs.type = 'button';
+  rs.onclick = () => confirmBox('Сбросить настройки?', 'Названия, цвет, виды идей и ссылки вернутся к исходным. Проекты и заметки не затрагиваются.', 'Сбросить', () => { S.settings = null; applySettings(); renderNav(); Store.save(); closeModal(); }, closeModal);
+  ch.appendChild(rs); g.appendChild(ch); e.appendChild(g);
+}
+
+/* ═══ 6. ОКНА ═══ */
+function openModal(html) { const o = $('ov'); o.innerHTML = '<div class="md" role="dialog" aria-modal="true">' + html + '</div>'; o.hidden = false; delete o.dataset.keep; return o; } // показать окно
+function closeModal() { LASTID = null; $('ov').hidden = true; $('ov').textContent = ''; draw(); }                                                                   // закрыть окно и обновить дашборд
+function confirmBox(title, text, yes, onYes, onNo) {              // окно «Вы уверены?» с двумя кнопками
+  openModal(`<h3>${esc(title)}</h3><p>${esc(text)}</p><div class="acts"><button class="b" id="cf-no" type="button">Назад</button><button class="p" id="cf-yes" type="button">${esc(yes)}</button></div>`);
+  on('cf-no', onNo); on('cf-yes', onYes);
+}
+function resultBox(res, next, warn = {}) {                                   // итог публикации по каждой площадке
+  const lines = Object.keys(res).map(k => `<p>${DEST[k]}: ${res[k] ? '<b>не отправлено</b> — ' + esc(res[k]) : '<b>опубликовано</b>'}${warn[k] ? '<br><small>Внимание: ' + esc(warn[k]) + '</small>' : ''}</p>`).join('');
+  openModal(`<h3>Результат</h3>${lines}<div class="acts"><button class="p" id="res-ok" type="button">Готово</button></div>`); on('res-ok', next);
+}
+
+function publishDialog(o) {                                       // o: {title, text, photos, sel, back, done(res,text)}
+  const ph = (o.photos || []).filter(p => p && p.fileId);         // фото, которые лежат на Google Диске и могут быть приложены
+  const sel = o.sel || ph.map(p => p.fileId);                     // какие фото отмечены (по умолчанию все)
+  const m = openModal(`<h3>Публикация</h3><p class="note">${esc(o.title)}</p>
+    <div class="opts" role="group" aria-label="Куда публиковать">
+      <label class="opt"><input type="checkbox" id="to-tg" checked><span>Telegram</span></label>
+      <label class="opt"><input type="checkbox" id="to-vk"><span>ВКонтакте</span></label></div>
+    <label class="fld" style="margin-top:14px"><span>Текст публикации</span><textarea id="pub-text" style="min-height:200px">${esc(o.text)}</textarea></label>
+    ${ph.length ? `<div class="fld"><span>Фото к публикации (отметьте нужные, максимум 10)</span><div class="ph">${ph.map(p => `<label class="pick"><input type="checkbox" data-pf="${esc(p.fileId)}" ${sel.includes(p.fileId) ? 'checked' : ''}><img src="${esc(p.url)}" alt="Фото"></label>`).join('')}</div></div>` : '<p class="note">Фото нет — пост уйдёт только текстом. Фото добавляются в окне идеи.</p>'}
+    <p class="note" id="mm"></p>
+    <div class="acts"><button class="b" id="pub-back" type="button">Назад</button><button class="p" id="pub-go" type="button">Опубликовать…</button></div>`);
+  m.oninput = () => { m.dataset.keep = '1'; };
+  on('pub-back', o.back);
+  on('pub-go', () => {
+    const to = ['tg', 'vk'].filter(k => $('to-' + k).checked), text = $('pub-text').value.trim(); // выбранные площадки и текст
+    const ids = [...m.querySelectorAll('[data-pf]')].filter(c => c.checked).map(c => c.dataset.pf).slice(0, 10); // ID выбранных фото
+    if (!to.length) return say('Выберите, куда публиковать'); if (!text) return say('Текст пустой');
+    confirmBox('Вы уверены?', `Опубликовать данный пост в: ${to.map(k => DEST[k]).join(' и ')}${ids.length ? ' вместе с фото (' + ids.length + ')' : ' без фото'}? Отменить публикацию потом не получится.`,
+      'Да, опубликовать', async () => {
+        openModal('<h3>Публикация…</h3><p class="note">Отправляю, подождите: с фото это занимает несколько секунд.</p>');
+        const res = {}, warn = {};                                   // результат по каждой площадке: '' = успех, иначе текст ошибки; warn — предупреждения
+        for (const k of to) {
+          try {
+            const r = await Api.call(k === 'tg' ? 'pultPublishTelegram' : 'pultPublishVK', text, ids); res[k] = ''; // text и ids уходят в Code.gs
+            Log.add('ok', DEST[k] + ': опубликовано' + (ids.length ? ' с фото (' + ids.length + ')' : ''));
+            if (r && r.warning) { warn[k] = r.warning; Log.error(DEST[k], new Error(r.warning)); }
+          }
+          catch (e) { res[k] = e.message; }
+        }
+        o.done(res, text, warn);
+      }, () => publishDialog(Object.assign({}, o, { text, sel: ids })));
+  });
+}
+
+const FORMS = {                                                   // формы «+ Добавить»: k — поле, l — подпись
+  idea: { label: 'Идея', fields: [{ k: 'title', l: 'Название', req: 1 }, { k: 'cat', l: 'Что за идея', type: 'cat' },
+    { k: 'desc', l: 'Краткое описание', type: 'area' }, { k: 'parts', l: 'Запчасти / коды' }, { k: 'cost', l: 'Расчётная стоимость' },
+    { k: 'links', l: 'Ссылки на маркетплейсы и коды', type: 'area' }] },
+  thought: { label: 'Мысль', fields: [{ k: 't', l: 'Что пришло в голову', type: 'area', req: 1 }] },
+  proj: { label: 'Сайт', fields: [{ k: 'n', l: 'Название', req: 1 }, { k: 'u', l: 'Ссылка' },
+    { k: 'd', l: 'Описание', type: 'area' }, { k: 'st', l: 'Статус', type: 'select', opts: PROJ_STATUS }] }
+};
+const CREATE = {                                                  // что создаётся при сохранении формы
+  idea: v => S.ideas.unshift(new Idea(v)),
+  thought: v => S.items.unshift({ id: uid(), k: 'idea', t: v.t, date: ISO }),
+  proj: v => S.proj.unshift({ id: uid(), n: v.n, u: v.u, d: v.d, st: v.st || 'none' })
+};
+
+function openAdd(o) {                                             // o: {type, vals, edit, onSave, onDelete} — окно добавления/изменения
+  const type = o.type || 'idea', F = FORMS[type], vals = o.vals || {};
+  const field = f => {                                            // HTML одного поля формы
+    const v = vals[f.k] != null ? vals[f.k] : (f.k === 'st' ? 'none' : '');
+    if (f.type === 'cat') return `<div class="fld"><span>${f.l}</span><div class="opts">${CATS.map(c => `<label class="opt"><input type="radio" name="f-cat" value="${c}" ${c === (v || 'Arduino') ? 'checked' : ''}><span>${c}</span></label>`).join('')}</div></div>`;
+    if (f.type === 'select') return `<label class="fld"><span>${f.l}</span><select id="f-${f.k}">${Object.keys(f.opts).map(x => `<option value="${x}" ${x === v ? 'selected' : ''}>${f.opts[x]}</option>`).join('')}</select></label>`;
+    const inp = f.type === 'area' ? `<textarea id="f-${f.k}">${esc(v)}</textarea>` : `<input id="f-${f.k}" type="${f.type === 'number' ? 'number' : 'text'}" value="${esc(v)}">`;
+    return `<label class="fld"><span>${f.l}</span>${inp}</label>`;
+  };
+  const types = o.edit ? '' : `<div class="opts" style="margin:10px 0 14px" role="group" aria-label="Что добавить">${Object.keys(FORMS).map(t => `<label class="opt"><input type="radio" name="type" value="${t}" ${t === type ? 'checked' : ''}><span>${FORMS[t].label}</span></label>`).join('')}</div>`;
+  const m = openModal(`<h3>${o.edit ? 'Изменить' : 'Добавить'}: ${F.label}</h3>${types}${F.fields.map(field).join('')}<p class="note" id="mm"></p>
+    <div class="acts">${o.edit ? '<button class="b" id="f-del" type="button">Удалить</button>' : ''}<button class="b" id="f-no" type="button">Отмена</button>
+    ${type === 'idea' ? '<button class="b ai" id="f-ai" type="button">Gemini: описание</button>' : ''}<button class="p" id="f-ok" type="button">Сохранить</button></div>`);
+  const read = () => { const v = {}; F.fields.forEach(f => { const r = m.querySelector('input[name="f-cat"]:checked'); v[f.k] = f.type === 'cat' ? (r ? r.value : '') : $('f-' + f.k).value.trim(); }); return v; }; // собрать значения полей
+  m.querySelectorAll('input[name="type"]').forEach(r => { r.onchange = () => openAdd({ type: r.value }); }); // переключение типа записи
+  m.oninput = m.onchange = () => { m.dataset.keep = '1'; };         // что-то ввели — Esc больше не закрывает окно
+  on('f-no', closeModal);
+  if (o.edit) on('f-del', () => { o.onDelete(); closeModal(); msg('Удалено'); });
+  if (type === 'idea') on('f-ai', () => { const v = read(); if (!v.title) return say('Сначала введите название'); ai('desc', new Idea(v).forAI(), t => { $('f-desc').value = t; }); });
+  on('f-ok', () => {                                              // сохранить
+    const v = read(), miss = F.fields.find(f => f.req && !v[f.k]);
+    if (miss) return say('Заполните поле «' + miss.l + '»');
+    (o.onSave || CREATE[type])(v); closeModal(); msg('Сохранено');
+  });
+  const first = m.querySelector('input[type=text],input[type=number],textarea'); if (first) first.focus();
+}
+
+function renderDetail(id) {                                       // карточка проекта справа: вся информация
+  const i = S.ideas.find(x => x.id === id);
+  if (!i) { $('pd').innerHTML = '<p class="empty">Выберите проект слева или нажмите «+ Новый проект».</p>'; return; }
+  const si = STAGES.findIndex(s => s.id === i.st), fin = i.st === 'done' || i.st === 'pub'; // fin — показывать финальную часть
+  const doneN = i.tasks.length - i.pending, pct = i.tasks.length ? Math.round(doneN / i.tasks.length * 100) : 0;
+  const cats = [...new Set([...CATS, i.cat])];                    // виды идей (+ текущий, если он нестандартный)
+  const noteRow = n => `<div class="row ${n.status === 'done' ? 'done' : ''}"><input type="checkbox" data-nchk="${n.id}" ${n.status === 'done' ? 'checked' : ''} aria-label="Выполнено">
+    <div class="t"><small>${esc(n.d)} · ${NOTE_STATUS[n.status]}</small><span id="nt-${n.id}">${esc(n.t)}</span></div>
+    <button class="x" data-nedit="${n.id}" type="button" aria-label="Изменить">✎</button><button class="x" data-ndel="${n.id}" type="button" aria-label="Удалить">×</button></div>`;
+  const notes = [...i.tasks].sort((a, b) => (a.status === 'done') - (b.status === 'done')); // сначала то, что ждёт работы
+  const badges = Object.keys(i.published).map(k => `<span class="chip" data-s="pub">${DEST[k]} · ${esc(i.published[k])}</span>`).join('');
+  const o = ideaHost(`<div class="whead"><div class="wcov" id="d-cov"></div><div class="wmeta"><h3>${esc(i.title) || 'Без названия'}</h3><div class="prog2"><div class="bar"><i style="width:${pctOf(i)}%"></i></div><span>${pctOf(i)}%</span></div></div></div>
+    <div class="covtools"><input id="c-url" type="text" placeholder="Ссылка на картинку для превью проекта"><button class="b" id="c-set" type="button">Задать</button><label class="b filebtn">Загрузить файл<input id="c-file" type="file" accept="image/*" hidden></label><button class="b" id="c-clr" type="button">Убрать</button></div>
+    <p class="note" style="margin-bottom:12px">Картинку можно вставить из буфера обмена (Ctrl+V), загрузить или задать по ссылке.</p>
+    <div class="steps" aria-label="Состояние идеи">${STAGES.map((s, k) => `<span class="${k === si ? 'on' : k < si ? 'past' : ''}">${s.name}</span>`).join('')}</div>
+    <div data-tab="over"><label class="fld"><span>Название</span><input id="d-title" type="text" value="${esc(i.title)}"></label>
+    <div class="two"><label class="fld"><span>Что за идея</span><select id="d-cat">${cats.map(c => `<option ${c === i.cat ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
+      <label class="fld"><span>Расчётная стоимость</span><input id="d-cost" type="text" value="${esc(i.cost)}"></label></div>
+    <label class="fld"><span>Описание проекта</span><textarea id="d-desc">${esc(i.desc)}</textarea></label>
+    <div class="acts" style="justify-content:flex-start;margin:-4px 0 12px"><button class="b ai" id="d-ai" type="button">Gemini: улучшить описание</button></div>
+    <label class="fld"><span>Запчасти / коды</span><input id="d-parts" type="text" value="${esc(i.parts)}"></label>
+    <label class="fld"><span>Ссылки на маркетплейсы и коды</span><textarea id="d-links" style="min-height:60px">${esc(i.links)}</textarea></label>
+    </div>
+    <div class="sec" data-tab="notes"><h4>Заметки и ход работы</h4>
+      <div class="prog"><span>Выполнено ${doneN} из ${i.tasks.length}</span><div class="bar"><i style="width:${pct}%"></i></div></div>
+      <div class="cmd"><input id="n-t" type="text" placeholder="Новая заметка: что сделать или что получилось"><button class="p" id="n-ok" type="button">Добавить</button></div>
+      ${notes.map(noteRow).join('') || '<p class="empty">Заметок пока нет</p>'}
+      ${i.codes.map(c => `<details class="code"><summary>${esc(c.name || 'Код')}</summary><pre>${esc(c.code)}</pre><div class="acts" style="justify-content:flex-start;margin-top:6px"><button class="b" data-ccp="${c.id}" type="button">Копировать</button><button class="b" data-cdel="${c.id}" type="button">Удалить</button></div></details>`).join('')}
+      <details class="addcode"><summary>+ Код с названием</summary><div class="code"><input id="c-n" type="text" placeholder="Название, например: пейджер — основной скетч"><textarea id="c-c" placeholder="Вставьте код"></textarea><div class="acts" style="margin-top:8px"><button class="p" id="c-ok" type="button">Сохранить код</button></div></div></details>
+      <div class="acts" style="justify-content:flex-start"><button class="b ai" id="n-ai" type="button">Gemini: собрать заметки в сводку</button></div>
+      ${i.summary ? `<label class="fld" style="margin-top:10px"><span>Сводка заметок (Gemini)</span><textarea id="d-sum" style="min-height:140px">${esc(i.summary)}</textarea></label><div class="acts" style="justify-content:flex-start;margin-top:0"><button class="b" id="sum-use" type="button">Сделать описанием проекта</button></div>` : ''}</div>
+    <div class="sec" data-tab="money"><h4>Затраты${i.spent ? ' · ' + i.spent.toLocaleString('ru-RU') + ' ₽' : ''}</h4>
+      <div class="two"><input id="e-a" type="number" min="0" step="0.01" placeholder="Сумма, ₽"><input id="e-l" type="text" placeholder="На что потрачено"></div>
+      <div class="acts" style="justify-content:flex-start"><button class="b" id="e-ok" type="button">+ Добавить затрату</button></div>
+      ${i.expenses.map((x, k) => `<div class="row"><div class="t"><small>${esc(x.d || '')}</small>${esc(x.label)} — ${Number(x.amount || 0).toLocaleString('ru-RU')} ₽</div><button class="x" data-edel="${k}" type="button" aria-label="Удалить">×</button></div>`).join('')}</div>
+    <div class="sec" data-tab="photos"><h4>Фото (папка проекта на Google Диске)</h4><div class="ph">${i.photos.map((p, n) => `<div><img src="${typeof p === 'string' ? p : p.url}" alt="Фото ${n + 1}"><button class="x" data-p="${n}" type="button" aria-label="Удалить фото">×</button></div>`).join('')}</div>
+      <input id="p-f" type="file" accept="image/*" multiple style="margin-top:8px"></div>
+    <div class="sec" data-tab="pub"><h4>Финал: пост для каналов</h4>${fin ? `<div class="final">
+      <label class="fld"><span>Текст поста</span><textarea id="d-text" style="min-height:170px">${esc(i.text)}</textarea></label>
+      <div class="acts" style="justify-content:flex-start;margin:0"><button class="b ai" id="t-ai" type="button">Gemini: подготовить пост</button><button class="b" id="t-cp" type="button">Скопировать</button></div>
+      ${badges ? `<div class="badges">${badges}</div>` : ''}</div>` : '<p class="note">Эта часть откроется, когда проект будет завершён.</p>'}</div>
+    <p class="note" id="mm"></p>
+    <div class="acts"><button class="b" id="d-del" type="button">Удалить</button><button class="b" id="d-no" type="button">Закрыть</button>
+      ${i.st === 'idea' ? '<button class="p" id="go-work" type="button">Начать работу</button>' : ''}
+      ${i.st === 'work' ? '<button class="p" id="go-done" type="button">Завершить проект</button>' : ''}
+      ${fin ? `<button class="b" id="go-work" type="button">Вернуть в работу</button><button class="p" id="d-pub" type="button">${i.st === 'pub' ? 'Опубликовать ещё раз…' : 'Опубликовать…'}</button>` : ''}</div>`);
+
+  const bind = (el, key) => { $(el).oninput = $(el).onchange = e => { i[key] = e.target.value; Store.save(); }; }; // поле → свойство идеи
+  [['d-title', 'title'], ['d-cat', 'cat'], ['d-cost', 'cost'], ['d-desc', 'desc'], ['d-parts', 'parts'], ['d-links', 'links']].forEach(a => bind(a[0], a[1]));
+  const go = (st, text) => { i.st = st; Store.save(); openIdea(id); msg(text); }; // сменить состояние и перерисовать окно
+  if ($('go-work')) on('go-work', () => go('work', 'Проект в работе'));
+  if ($('go-done')) on('go-done', () => i.pending
+    ? confirmBox('Есть невыполненные заметки', `Заметок, ожидающих работы: ${i.pending}. Завершить проект всё равно?`, 'Да, завершить', () => go('done', 'Проект готов'), () => openIdea(id))
+    : go('done', 'Проект готов'));
+  const cu = coverOf(i); if (cu) $('d-cov').style.backgroundImage = bgUrl(cu); else $('d-cov').textContent = (i.title || '?')[0].toUpperCase(); // превью проекта
+  on('c-set', () => { const u = $('c-url').value.trim(); if (!/^https?:\/\//i.test(u)) return say('Вставьте ссылку, которая начинается с http:// или https://'); i.cover = u; Store.save(); openIdea(id); });
+  on('c-clr', () => { i.cover = ''; Store.save(); openIdea(id); });
+  $('c-file').onchange = e => { const f = e.target.files[0]; if (f) setCover(i, f, () => openIdea(id)); };
+  on('d-ai', () => ai('desc', i.forAI(), t => { i.desc = t; $('d-desc').value = t; Store.save(); }));
+  on('n-ok', () => { const v = $('n-t').value.trim(); if (!v) return; i.notes.push({ id: uid(), d: RU(), t: v, status: 'todo' }); Store.save(); openIdea(id); });
+  $('n-t').onkeydown = e => { if (e.key === 'Enter') $('n-ok').click(); };
+  o.querySelectorAll('[data-nchk]').forEach(c => { c.onchange = () => { i.notes.find(n => n.id === c.dataset.nchk).status = c.checked ? 'done' : 'todo'; Store.save(); openIdea(id); }; });
+  o.querySelectorAll('[data-ndel]').forEach(b => { b.onclick = () => { i.notes = i.notes.filter(n => n.id !== b.dataset.ndel); Store.save(); openIdea(id); }; });
+  o.querySelectorAll('[data-nedit]').forEach(b => { b.onclick = () => {   // править текст заметки на месте
+    const n = i.notes.find(x => x.id === b.dataset.nedit), inp = h('input', 'ned'); inp.type = 'text'; inp.value = n.t;
+    $('nt-' + n.id).replaceWith(inp); inp.focus();
+    inp.onblur = () => { if ($('ov').hidden) return; n.t = inp.value.trim() || n.t; Store.save(); openIdea(id); };
+    inp.onkeydown = e => { if (e.key === 'Enter') inp.blur(); };
+  }; });
+  on('n-ai', () => i.tasks.length ? ai('summary', i.forAI(), t => { i.summary = t; Store.save(); openIdea(id); }) : say('Сначала добавьте заметки'));
+  on('c-ok', () => { const nm = $('c-n').value.trim(), cd = $('c-c').value; if (!nm || !cd.trim()) return say('Укажите название и вставьте код'); i.notes.push({ id: uid(), kind: 'code', name: nm, code: cd, t: nm, d: RU(), status: 'done' }); Store.save(); openIdea(id); }); // код хранится как скрытая заметка
+  o.querySelectorAll('[data-ccp]').forEach(b => { b.onclick = () => copyText(i.notes.find(n => n.id === b.dataset.ccp).code); });
+  o.querySelectorAll('[data-cdel]').forEach(b => { b.onclick = () => { i.notes = i.notes.filter(n => n.id !== b.dataset.cdel); Store.save(); openIdea(id); }; });
+  if ($('d-sum')) { $('d-sum').oninput = e => { i.summary = e.target.value; Store.save(); }; on('sum-use', () => { i.desc = i.summary; Store.save(); openIdea(id); msg('Сводка стала описанием проекта'); }); }
+  on('e-ok', () => { const a = Number($('e-a').value), l = $('e-l').value.trim(); if (!(a > 0) || !l) return say('Укажите сумму и назначение'); i.expenses.push({ id: uid(), amount: a, label: l, d: RU(), iso: ISO }); Store.save(); openIdea(id); });
+  o.querySelectorAll('[data-edel]').forEach(b => { b.onclick = () => { i.expenses.splice(+b.dataset.edel, 1); Store.save(); openIdea(id); }; });
+  $('p-f').onchange = e => { let left = e.target.files.length; [...e.target.files].forEach(f => uploadPhoto(f, i, p => { i.photos.push(p); if (--left === 0) { Store.save(); openIdea(id); } })); };
+  o.querySelectorAll('[data-p]').forEach(b => { b.onclick = () => { const p = i.photos[+b.dataset.p]; if (p && p.fileId) Api.call('pultDeletePhoto', p.fileId).catch(() => {}); i.photos.splice(+b.dataset.p, 1); Store.save(); openIdea(id); }; });
+  if (fin) {                                                      // финальная часть: пост
+    $('d-text').oninput = e => { i.text = e.target.value; Store.save(); };
+    on('t-ai', () => ai('post', i.forAI(), t => { i.text = t; $('d-text').value = t; Store.save(); }));
+    on('t-cp', () => copyText($('d-text').value));
+    on('d-pub', () => publishDialog({ title: i.title, text: i.text, photos: i.photos, back: () => openIdea(id), done: (res, text, warn) => {
+      i.text = text; Object.keys(res).forEach(k => { if (!res[k]) i.published[k] = RU(); });   // запоминаем, куда и когда ушло
+      if (Object.values(res).some(v => !v)) i.st = 'pub'; Store.save(); resultBox(res, () => openIdea(id), warn); } }));
+  }
+  on('d-no', () => { SEL = null; renderBoard(); });
+  on('d-del', () => confirmBox('Удалить идею?', 'Заметки, затраты и ссылки на фото будут удалены из Пульта.', 'Удалить', () => { S.ideas = S.ideas.filter(x => x !== i); SEL = null; closeModal(); msg('Идея удалена'); }, () => openIdea(id)));
+}
+
+function uploadPhoto(file, idea, cb) {                            // уменьшить фото и загрузить на Google Диск
+  const r = new FileReader();
+  r.onload = () => {
+    const im = new Image();
+    im.onload = () => {
+      const k = Math.min(1, 720 / Math.max(im.width, im.height)), c = document.createElement('canvas'); // уменьшаем до 720 px
+      c.width = im.width * k; c.height = im.height * k; const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height); // белый фон: у PNG прозрачность иначе становится чёрной
+      ctx.drawImage(im, 0, 0, c.width, c.height);
+      say('Загружаю фото на Google Диск…');
+      Api.call('pultUploadPhoto', c.toDataURL('image/jpeg', .7), (file.name || 'photo').replace(/\.[^.]+$/, '') + '.jpg', idea.id, idea.title)
+        .then(f => { say('Фото сохранено'); cb({ url: f.url, fileId: f.fileId, name: f.name }); })
+        .catch(e => say('Не удалось загрузить фото: ' + e.message));
+    };
+    im.onerror = () => { say('Не удалось прочитать изображение'); Log.error('Фото ' + file.name, new Error('не удалось прочитать изображение')); }; im.src = r.result;
+  };
+  r.readAsDataURL(file);
+}
+
+/* ═══ 7. ЗАПУСК ═══ */
+$('new').onclick = () => openAdd({});                             // кнопка «+ Добавить»
+$('clr').onclick = () => { ['items', 'drafts', 'exp'].forEach(a => { S[a] = S[a].filter(x => !x.demo); }); msg('Демо-записи убраны'); draw(); };
+$('refresh').onclick = () => boot();                              // «↻ Обновить»
+// Клик по тёмному фону окно НЕ закрывает (чтобы не терять набранное при выделении текста). Закрытие — только кнопками или Esc.
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('ov').hidden && !$('ov').dataset.keep) closeModal(); /* Esc не работает, если в форме уже что-то введено */ }); // Esc закрывает окно
+
+function boot() {                                                 // загрузить данные из Google Таблицы
+  Store.ready = false; Store.again = false; clearTimeout(Store.timer); // при каждой загрузке блокируем запись до подтверждения
+  Store.sync('Загрузка…', 'pause'); msg('Загружаю данные из Google Таблицы…');
+  const slow = setTimeout(() => Log.error('Загрузка', new Error('сервер не ответил за 30 секунд')), 30000);
+  Api.call('pultLoadState').then(r => {
+    if (!r || r.ok !== true) throw new Error('Сервер не подтвердил загрузку данных.');
+    let raw = null;
+    if (r.data) {
+      try { raw = JSON.parse(r.data); }
+      catch (e) { throw new Error('Ответ Google Таблицы содержит повреждённые данные. Запись заблокирована до успешной загрузки.'); }
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Получено состояние неверного формата.');
+    }
+    clearTimeout(slow); Store.fill(raw); Store.ready = true;
+    if (!BOOTED) { BOOTED = true; setView(cfg().start); }
+    draw(); Store.sync('Загружено', 'done'); msg('Данные синхронизированы с Google Таблицей'); Log.add('ok', 'Данные загружены из таблицы');
+  }).catch(e => {
+    clearTimeout(slow); Store.ready = false; Store.again = false;
+    Store.fill(null); draw(); Store.sync('Загрузка не удалась — запись заблокирована', 'pause');
+    msg('Не удалось загрузить данные. Изменения не будут записаны в таблицу: ' + e.message); Log.error('Загрузка данных', e);
+  });
+}
+window.addEventListener('error', e => Log.error('Ошибка страницы', e.error || e.message));          // любая неожиданная ошибка → журнал + окно
+window.addEventListener('unhandledrejection', e => Log.error('Ошибка', e.reason));
+$('logclr').onclick = () => { Log.items = []; renderLog(); };
+$('logcp').onclick = () => copyText(Log.items.map(e => e.t + ' [' + e.lvl + '] ' + e.text + (e.fix ? ' → ' + e.fix : '')).join('\n'));
+$('q').oninput = e => { Q = e.target.value.trim().toLowerCase(); if (VIEW === 'overview') setView('projects'); render(); }; // поиск по проектам, задачам и заметкам
+$('bell').onclick = () => setView('log');                                      // колокольчик открывает журнал
+document.addEventListener('paste', e => {                                          // Ctrl+V с картинкой = превью выбранного проекта
+  if (VIEW !== 'projects' || !SEL || !e.clipboardData) return;
+  const f = [...e.clipboardData.files].find(x => x.type.startsWith('image/')), i = S.ideas.find(x => x.id === SEL); if (!f || !i) return;
+  e.preventDefault(); setCover(i, f, () => openIdea(SEL));
+});
+renderNav(); setView('projects'); renderLog(); boot();
+window.__guard.complete = true;                                      // файл дочитан до конца: страж запуска отключается
+
+
+</script>
