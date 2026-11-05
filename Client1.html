@@ -229,7 +229,7 @@ function renderHomeExtras() {
     const card=h('div','work-feature'), cover=h('div','work-cover');
     if (coverOf(i)) cover.style.backgroundImage='url("'+String(coverOf(i)).replace(/"/g,'%22')+'")';
     else cover.textContent=(i.title||'П')[0].toUpperCase();
-    const body=h('div'), title=h('b',null,i.title||'Без названия'), desc=h('p',null,i.desc||i.cat||'Проект в работе');
+    const body=h('div'), title=h('b',null,i.title||'Без названия'), desc=h('p','work-desc',i.desc||i.cat||'Проект в работе');
     const bar=h('div','bar'), fill=h('i'); fill.style.width=pctOf(i)+'%'; bar.appendChild(fill);
     const pct=h('div','pct',pctOf(i)+'% готово');
     const open=h('button','b','Открыть проект →'); open.type='button'; open.onclick=()=>openIdea(i.id);
@@ -316,29 +316,19 @@ function renderTasks() {                                          // разде�
   if (!shown) e.appendChild(h('p', 'empty', 'Задач нет. Заметки добавляются внутри проекта, вкладка «Заметки».'));
 }
 let QI = 0;                                                       // номер заметки, показанной в очереди (оранжевая карточка)
-function renderToday() {                                          // оранжевая карточка «Сегодня» — считается по «Идеям и проектам»
-  const e = $('hot'), hr = new Date().getHours(); e.textContent = '';
-  e.appendChild(h('p', 'gr', hr < 5 ? 'Доброй ночи' : hr < 12 ? 'Доброе утро' : hr < 18 ? 'Добрый день' : 'Добрый вечер'));
-  const d = new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
-  e.appendChild(h('p', 'date', d[0].toUpperCase() + d.slice(1)));
-  const work = S.ideas.filter(i => i.st === 'work'), todo = [];    // проекты «В работе» и их заметки, ждущие работы
-  work.forEach(i => i.tasks.forEach(n => { if (n.status !== 'done') todo.push({ i, n }); }));
-  const nums = h('div', 'nums');
-  [[work.length, 'проектов в работе'], [todo.length, 'заметок ждут работы'], [S.ideas.filter(i => i.st === 'done').length, 'готово к публикации']].forEach(a => {
-    const b = h('div'); b.appendChild(h('b', null, a[0])); b.appendChild(h('span', null, a[1])); nums.appendChild(b);
-  });
-  e.appendChild(nums);
-  const q = h('div', 'queue');                                    // компактная очередь: одна заметка и стрелки
-  if (!todo.length) q.appendChild(h('span', null, 'Очередь пуста: добавьте заметку в проект «В работе»'));
-  else {
-    QI = (QI + todo.length) % todo.length; const cur = todo[QI];
-    const prev = h('button', 'qb', '‹'), next = h('button', 'qb', '›'), body = h('button', 'lnk', cur.i.title + ': ' + cur.n.t);
-    [prev, next, body].forEach(b => { b.type = 'button'; });
-    prev.setAttribute('aria-label', 'Предыдущая'); next.setAttribute('aria-label', 'Следующая'); body.title = cur.n.t;
-    prev.onclick = () => { QI--; renderToday(); }; next.onclick = () => { QI++; renderToday(); }; body.onclick = () => openIdea(cur.i.id);
-    q.appendChild(prev); q.appendChild(body); q.appendChild(h('small', null, (QI + 1) + '/' + todo.length)); q.appendChild(next);
-  }
-  e.appendChild(h('p', null, 'Сейчас по очереди')); e.appendChild(q);
+function renderToday() {
+  const e=$('hot'), hr=new Date().getHours(); e.textContent='';
+  const left=h('div'),right=h('div');
+  left.appendChild(h('p','gr',hr<5?'Доброй ночи':hr<12?'Доброе утро':hr<18?'Добрый день':'Добрый вечер'));
+  left.appendChild(h('p','date','Твой центр управления идеями, проектами и жизнью'));
+  const d=new Date().toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  right.appendChild(h('p','banner-date',d[0].toUpperCase()+d.slice(1)));
+  const work=S.ideas.filter(i=>i.st==='work');
+  const openTasks=S.ideas.reduce((n,i)=>n+(i.tasks||[]).filter(t=>t.status!=='done').length,0);
+  const published=S.ideas.filter(i=>i.st==='pub'||Object.keys(i.published||{}).length>0).length;
+  const summary=h('div','banner-summary');
+  [[work.length,'проектов в работе'],[openTasks,'задач ждут выполнения'],[published,'опубликовано']].forEach(([n,label])=>{const item=h('div','banner-stat');item.append(h('b',null,String(n)),h('span',null,label));summary.appendChild(item);});
+  e.append(left,right,summary);
 }
 
 function renderChannels() {                                       // карточка «Каналы и публикации»
