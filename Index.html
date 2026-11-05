@@ -224,6 +224,19 @@ nav{gap:5px}nav button{padding:11px 13px;border-radius:10px;font-size:14px;color
 .dash-action .da-icon{width:30px;height:30px;border-radius:9px;background:#ff6a2b22;color:var(--acc);display:grid;place-items:center;font-size:16px;flex:none}.dash-action .da-sub{display:block;color:var(--mut);font-size:11px;margin-top:2px}
 @media(max-width:1100px){.overview-layout{grid-template-columns:1fr}.dash-actions{position:static}.view[data-v=overview] .ovgrid{grid-template-columns:1fr 1fr}.view[data-v=overview] #hot,.view[data-v=overview] #ol{grid-column:1/-1}}
 @media(max-width:900px){.app{grid-template-columns:1fr}.side{background:#080e15}.main{padding:12px 12px 94px}.view[data-v=overview] .ovgrid{grid-template-columns:1fr}.view[data-v=overview] #hot,.view[data-v=overview] #ol{grid-column:auto}.view[data-v=overview] #hot{padding:20px}.view[data-v=overview] #hot .nums{gap:18px}.dash-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}.dash-actions h2{grid-column:1/-1}.dash-action{margin:0;padding:10px}}
+
+/* Home dashboard — composed to match the approved command-center mockup */
+.overview-top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin:2px 0 14px}.overview-top h1{font:700 23px Geologica,sans-serif}.overview-top h1 span{font:400 13px "Golos Text",sans-serif;color:var(--mut);margin-left:8px}.overview-top p{margin:5px 0 0;color:var(--mut);font-size:13px}
+.welcome{min-height:112px!important;margin-bottom:14px;background:linear-gradient(90deg,#111925eF 0%,#111925a6 55%,#11192570),url("https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1800&q=85") center 48%/cover!important;display:flex;align-items:center;justify-content:space-between;gap:16px}.welcome .gr{font:700 23px Geologica,sans-serif}.welcome .date{font:400 13px "Golos Text",sans-serif;color:#c3cedc;margin:6px 0 0!important}.welcome .nums{margin:0;gap:18px}.welcome .nums b{font:700 25px Geologica,sans-serif}.welcome .nums span{font-size:11px;color:#c3cedc}
+.dash-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:14px}.dash-kpi{min-width:0;background:linear-gradient(145deg,#121b26,#0d151e);border:1px solid #263546;border-left:3px solid var(--kpi);border-radius:14px;padding:15px}.kpi-icon{display:grid;place-items:center;width:30px;height:30px;border-radius:9px;background:color-mix(in srgb,var(--kpi) 18%,transparent);color:var(--kpi);margin-bottom:9px}.kpi-label{display:block;color:#b9c5d5;font-size:12px}.kpi-value{display:block;font:700 29px/1.15 Geologica,sans-serif;margin:5px 0}.kpi-foot{font-size:11px;color:var(--mut)}
+.home-layout{display:grid;grid-template-columns:minmax(0,1fr) 270px;gap:14px;align-items:start}.home-main{display:flex;flex-direction:column;gap:14px}.home-pair{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);gap:14px;align-items:stretch}.home-pair>.c{min-width:0}.home-pair .c h2{display:flex;align-items:center}.home-pair h2 .b{font-size:11px;padding:4px 7px}
+.dash-side{display:flex;flex-direction:column;gap:14px;position:sticky;top:14px}.dash-actions h2{font:600 15px Geologica,sans-serif;margin:0 0 12px}.dash-action{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:#141f2b;border:1px solid #263546;color:var(--ink);border-radius:11px;padding:11px;margin:7px 0;font:500 13px "Golos Text",sans-serif;cursor:pointer}.dash-action:hover{border-color:var(--acc)}.dash-action .da-icon{width:30px;height:30px;border-radius:9px;background:#ff6a2b22;color:var(--acc);display:grid;place-items:center;font-size:16px;flex:none}.dash-action .da-sub{display:block;color:var(--mut);font-size:11px;margin-top:2px}.dash-action>b{margin-left:auto;font-size:18px;color:var(--mut)}
+#dashStatsBody .row{font-size:12px;padding:8px 0}#dashStatsBody .row .t{color:#b6c3d3}#dashStatsBody .row small{margin-left:auto;color:var(--ink)}.dash-sync{border-color:#24553e!important}.dash-sync .sync{color:#64d69b;font-size:12px}.dash-sync small{display:block;color:var(--mut);margin:5px 0 0 14px;font-size:10px}
+#dashWorkBody .work-feature{display:grid;grid-template-columns:118px minmax(0,1fr);gap:12px;padding:8px 0}.work-feature .work-cover{height:112px;border-radius:10px;background:#172230 center/cover;display:grid;place-items:center;color:var(--acc);font-size:30px}.work-feature b{font:600 14px Geologica,sans-serif}.work-feature p{font-size:12px;color:var(--mut);margin:5px 0}.work-feature .bar{margin:9px 0}.work-feature .bar i{background:var(--acc)}.work-feature .pct{font-size:11px;color:var(--acc);text-align:right}
+#dashNotesBody .row{font-size:12px;padding:8px 0}#dashExpenseBody .expense-line{display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-top:1px solid var(--line);font-size:12px}#dashExpenseBody .expense-line b{font-weight:600}
+@media(max-width:1150px){.home-layout{grid-template-columns:1fr}.dash-side{position:static;display:grid;grid-template-columns:1fr 1fr}.dash-sync{grid-column:1/-1}}
+@media(max-width:850px){.dash-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.home-pair{grid-template-columns:1fr}.dash-side{grid-template-columns:1fr}.welcome{align-items:flex-start;flex-direction:column}.overview-top h1 span{display:block;margin:5px 0}.overview-top{align-items:flex-start}}
+
 </style>
 </head>
 <body>
@@ -244,12 +257,27 @@ nav{gap:5px}nav button{padding:11px 13px;border-radius:10px;font-size:14px;color
   </header>
   <p class="toast" id="toast" aria-live="polite"></p>
   <section class="view" data-v="projects"><div id="ds"></div><div class="split" id="split"><section class="c" id="pl" aria-label="Список проектов"></section><section class="c" id="pd" aria-label="Проект"></section></div></section>
-  <section class="view" data-v="overview" hidden><div class="overview-layout"><div class="ovgrid">
-   <section class="c hot" id="hot" aria-label="Сегодня"></section>
-   <section class="c" id="oa" aria-label="Активные проекты"></section>
-   <section class="c" id="ot" aria-label="Ближайшие задачи"></section>
-   <section class="c wide" id="ol" aria-label="Последняя активность"></section>
-  </div><aside class="dash-actions" aria-label="Быстрые переходы"><h2>Быстрые действия</h2><button class="dash-action" type="button" onclick="setView('projects')"><span class="da-icon">＋</span><span>Открыть проекты<span class="da-sub">Продолжить работу над проектом</span></span></button><button class="dash-action" type="button" onclick="setView('thoughts')"><span class="da-icon">✦</span><span>Добавить идею<span class="da-sub">Перейти к списку идей</span></span></button><button class="dash-action" type="button" onclick="setView('tasks')"><span class="da-icon">☑</span><span>Посмотреть задачи<span class="da-sub">Открытые и завершённые</span></span></button><button class="dash-action" type="button" onclick="setView('publish')"><span class="da-icon">➤</span><span>Публикации<span class="da-sub">Черновики и готовые посты</span></span></button></aside></div></section>
+  <section class="view" data-v="overview" hidden>
+   <div class="overview-top"><div><h1>Пульт <span>личный командный центр</span></h1><p>Идеи, проекты и жизнь — в одном месте</p></div><button class="add" type="button" onclick="openAdd({type:'idea'})">＋ Новый проект</button></div>
+   <div class="welcome c" id="hot" aria-label="Приветствие и сегодня"></div>
+   <div class="dash-kpis" id="dashMetrics"></div>
+   <div class="home-layout">
+    <div class="home-main">
+     <div class="home-pair"><section class="c" id="dashWork"><h2>Продолжить работу <small><button class="b" onclick="setView('projects')">Все проекты →</button></small></h2><div id="dashWorkBody"></div></section>
+      <section class="c" id="ot" aria-label="Задачи на сегодня"></section></div>
+     <div class="home-pair"><section class="c" id="oa" aria-label="Активные проекты"></section><section class="c" id="dashNotes"><h2>Последние заметки <small><button class="b" onclick="setView('thoughts')">Все →</button></small></h2><div id="dashNotesBody"></div></section></div>
+     <div class="home-pair"><section class="c" id="dashExpense"><h2>Расходы <small><button class="b" onclick="setView('analytics')">Подробнее →</button></small></h2><div id="dashExpenseBody"></div></section><section class="c" id="ol" aria-label="Последняя активность"></section></div>
+    </div>
+    <aside class="dash-side"><section class="c dash-actions"><h2>Быстрые действия</h2>
+      <button class="dash-action" type="button" onclick="openAdd({type:'idea'})"><span class="da-icon">＋</span><span>Новый проект<span class="da-sub">Запустить идею и задачи</span></span><b>›</b></button>
+      <button class="dash-action" type="button" onclick="setView('thoughts')"><span class="da-icon">✦</span><span>Добавить идею<span class="da-sub">Сохранить мысль в поток</span></span><b>›</b></button>
+      <button class="dash-action" type="button" onclick="setView('tasks')"><span class="da-icon">☑</span><span>Создать задачу<span class="da-sub">Перейти к задачам</span></span><b>›</b></button>
+      <button class="dash-action" type="button" onclick="setView('log')"><span class="da-icon">▤</span><span>Журнал событий<span class="da-sub">Сохранение и история</span></span><b>›</b></button>
+     </section><section class="c" id="dashStats"><h2>Статистика таблицы</h2><div id="dashStatsBody"></div></section>
+      <section class="c dash-sync"><span class="sync" id="dashSync">● Система работает</span><small>Google Sheets · Диск</small></section>
+    </aside>
+   </div>
+  </section>
   <section class="view" data-v="tasks" hidden><section class="c solo" id="tk" aria-label="Задачи"></section></section>
   <section class="view" data-v="analytics" hidden><div id="ex"></div></section>
   <section class="view" data-v="publish" hidden><section class="c solo" id="ch" aria-label="Публикации"></section></section>
